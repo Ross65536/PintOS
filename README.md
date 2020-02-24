@@ -24,3 +24,16 @@ to work on the projects.**
 ## Setup
 The instructor wrote a detailed [guide](https://cs.jhu.edu/~huang/cs318/fall17/project/setup.html) on 
 how to setup the toolchain and development environment to work on Pintos projects.
+
+## Instructions
+
+### Debugging
+
+```bash
+pintos --gdb -- run mytest
+
+# in another window
+cd build
+pintos-gdb kernel.o
+
+```
