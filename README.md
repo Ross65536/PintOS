@@ -45,3 +45,14 @@ Running:
 ```
 make qemu
 ```
+
+### Testing
+
+To run unit tests run:
+
+```
+cd src/unit_tests
+make test
+```
+
+> Note: runtime for tests is userland. Useful for testing pure functions 

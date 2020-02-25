@@ -19,6 +19,18 @@
     int tail; \
   } 
 
+#define __RINGBUFFER_NEXT(val, N) ({ (val + 1) % N; })
+
+
+// internal. Push head
+#define __RINGBUFFER_PUSH(buf, val) \
+  buf.data[buf.head] = val; \
+  buf.head = __RINGBUFFER_NEXT(buf.head, buf.size);
+
+// internal. Pop tail
+#define __RINGBUFFER_POP(buf) ({ buf.tail = __RINGBUFFER_NEXT(buf.tail, buf.size); })
+
+
 /* initialize struct (MANDATORY) */ 
 #define RINGBUFFER_INIT(buf, N) \
   buf.size = N; \
@@ -28,15 +40,8 @@
 
 #define RINGBUFFER_IS_EMPTY(buf) ({ buf.head == buf.tail; })
 
-#define RINGBUFFER_IS_FULL(buf) ({ buf.head == (buf.tail + 1) % buf.size; })
+#define RINGBUFFER_IS_FULL(buf) ({ buf.tail == __RINGBUFFER_NEXT(buf.head, buf.size); })
 
-// internal. Push head
-#define __RINGBUFFER_PUSH(buf, val) \
-  buf.data[buf.head] = val; \
-  buf.head = (buf.head + 1) % buf.size;
-
-// internal. Pop tail
-#define __RINGBUFFER_POP(buf) ({ buf.tail = (buf.tail + 1) % buf.size; })
 
 /* 
   Push value to ringbuffer, if full delete last value. Push to head.
@@ -53,10 +58,11 @@
  */
 #define RINGBUFFER_POP(T, buf, has_popped) \
   ({ \
-    T val = buf.data[buf.tail]; \
+    T val; \
     if (RINGBUFFER_IS_EMPTY(buf)) \
       has_popped = false; \
     else { \
+      val = buf.data[buf.tail]; \
       __RINGBUFFER_POP(buf); \
       has_popped = true; \
     } \
