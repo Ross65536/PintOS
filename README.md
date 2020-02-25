@@ -30,10 +30,18 @@ how to setup the toolchain and development environment to work on Pintos project
 ### Debugging
 
 ```bash
+cd src/threads
+make
 pintos --gdb -- run mytest
 
 # in another window
 cd build
 pintos-gdb kernel.o
+target remote localhost:1234
+```
 
+Running: 
+
+```
+make qemu
 ```

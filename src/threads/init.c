@@ -38,6 +38,8 @@
 #include "filesys/fsutil.h"
 #endif
 
+#include "kernel_shell.h"
+
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
 
@@ -133,7 +135,7 @@ pintos_init (void)
     /* Run actions specified on kernel command line. */
     run_actions (argv);
   } else {
-    // TODO: no command line passed to kernel. Run interactively 
+    start_kernel_shell ();
   }
 
   /* Finish up. */

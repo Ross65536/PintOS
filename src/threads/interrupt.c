@@ -136,6 +136,7 @@ intr_init (void)
   /* Initialize intr_names. */
   for (i = 0; i < INTR_CNT; i++)
     intr_names[i] = "unknown";
+    
   intr_names[0] = "#DE Divide Error";
   intr_names[1] = "#DB Debug Exception";
   intr_names[2] = "NMI Interrupt";
