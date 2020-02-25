@@ -56,18 +56,7 @@ static char *ringbuffer_tests()
   return 0;
 }
 
-int main(int argc, char **argv)
+int main()
 {
-  char *result = ringbuffer_tests();
-  if (result != 0)
-  {
-    fprintf(stderr, "TESTS FAILED: ");
-    fprintf(stderr, "%s\n", result);
-    free(result);
-  }
-  else
-    printf("ALL TESTS PASSED\n");
-
-  printf("Tests run: %d\n", tests_run);
-  return result != 0;
+  run_main(ringbuffer_tests);
 }

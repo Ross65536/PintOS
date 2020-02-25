@@ -1,13 +1,24 @@
+# add files here
+FILES+=ringbuffer_test 
+
+
 CC=gcc
 CFLAGS=-I. -Wall
-BIN_NAME=tests
+OBJECTS = $(FILES:=.o)
 
-build: ringbuffer_test.o
-		$(CC) -o $(BIN_NAME) ringbuffer_test.c $(CFLAGS)
+define \n
+
+
+endef
+
+%.o: %.c minunit.h
+	$(CC) $(CFLAGS) -o $@ $<
+
+build: $(OBJECTS)
+	$(echo "")
 
 test: build
-		./$(BIN_NAME)
+	$(foreach f, $(OBJECTS), ./$(f)${\n})
 
 clean:
 	rm *.o
-	rm $(BIN_NAME)
