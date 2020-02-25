@@ -12,51 +12,53 @@ RINGBUFFER(int, BUFFER_SIZE);
 int tests_run = 0;
 
 static char *
-test_ringbuffer_empty()
+test_ringbuffer()
 {
   struct ringbuffer_int buf;
 
   RINGBUFFER_INIT(buf, BUFFER_SIZE);
-  mu_assert("init to empty", RINGBUFFER_IS_EMPTY(buf));
+  MU_ASSERT("init to empty", RINGBUFFER_IS_EMPTY(buf));
 
   bool popped_1;
   RINGBUFFER_POP(int, buf, popped_1);
-  mu_assert("", !popped_1);
-  mu_assert("", RINGBUFFER_IS_EMPTY(buf));
+  MU_ASSERT("", !popped_1);
+  MU_ASSERT("", RINGBUFFER_IS_EMPTY(buf));
 
   RINGBUFFER_PUSH(buf, 1);
-  mu_assert("", !RINGBUFFER_IS_EMPTY(buf));
-  mu_assert("", !RINGBUFFER_IS_FULL(buf));
+  MU_ASSERT("", !RINGBUFFER_IS_EMPTY(buf));
+  MU_ASSERT("", !RINGBUFFER_IS_FULL(buf));
 
   bool popped_2;
   int val_2 = RINGBUFFER_POP(int, buf, popped_2);
-  mu_assert("", RINGBUFFER_IS_EMPTY(buf));
-  mu_assert("", val_2 == 1);
-  mu_assert("", popped_2);
+  MU_ASSERT("", RINGBUFFER_IS_EMPTY(buf));
+  MU_ASSERT("", val_2 == 1);
+  MU_ASSERT("", popped_2);
 
   RINGBUFFER_PUSH(buf, 1);
   RINGBUFFER_PUSH(buf, 2);
-  mu_assert("", RINGBUFFER_IS_FULL(buf));
+  MU_ASSERT("", RINGBUFFER_IS_FULL(buf));
 
   RINGBUFFER_PUSH(buf, 3);
-  mu_assert("", RINGBUFFER_IS_FULL(buf));
+  MU_ASSERT("", RINGBUFFER_IS_FULL(buf));
 
   bool popped_3;
   int val_3 = RINGBUFFER_POP(int, buf, popped_3);
-  mu_assert("", !RINGBUFFER_IS_FULL(buf));
-  mu_assert("", val_3 == 2);
-  mu_assert("", popped_3);
+  MU_ASSERT("", !RINGBUFFER_IS_FULL(buf));
+  MU_ASSERT("", val_3 == 2);
+  MU_ASSERT("", popped_3);
 
   return 0;
 }
 
-static char *ringbuffer_tests()
+static char *
+ringbuffer_tests()
 {
-  mu_run_test(test_ringbuffer_empty);
+  MU_RUN_TEST(test_ringbuffer);
   return 0;
 }
 
-int main()
+int 
+main()
 {
-  run_main(ringbuffer_tests);
+  MU_RUN_TESTS(ringbuffer_tests);
 }

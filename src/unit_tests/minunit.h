@@ -12,7 +12,7 @@ extern int tests_run;
 
 typedef char* (*test_function)(void);
 
-#define mu_assert(message, test) \
+#define MU_ASSERT(message, test) \
   do \
   { \
     if (!(test)) { \
@@ -23,7 +23,7 @@ typedef char* (*test_function)(void);
   } while (0)
 
 
-#define mu_run_test(test)   \
+#define MU_RUN_TEST(test)   \
   do                        \
   {                         \
     char *message = test(); \
@@ -33,7 +33,7 @@ typedef char* (*test_function)(void);
   } while (0)
 
 
-#define run_main(test_function) \
+#define MU_RUN_TESTS(test_function) \
   printf("-- Tests: " __FILE__ " --\n"); \
   char *result = test_function(); \
   if (result != 0) \

@@ -9,11 +9,11 @@
 
 RINGBUFFER(uint8_t, BUFFER_SIZE);
 
+struct ringbuffer_uint8_t ringbuf;
 
 void 
 start_kernel_shell (void) 
 {
-  struct ringbuffer_uint8_t ringbuf;
   RINGBUFFER_INIT (ringbuf, BUFFER_SIZE);
   RINGBUFFER_PUSH (ringbuf, 'Z');
   bool popped;
