@@ -16,14 +16,15 @@ start_kernel_shell (void)
   struct ringbuffer_uint8_t ringbuf;
   RINGBUFFER_INIT (ringbuf, BUFFER_SIZE);
   RINGBUFFER_PUSH (ringbuf, 'Z');
-  uint8_t val = RINGBUFFER_POP (uint8_t, ringbuf);
-  printf ("%c %x", val, val);
+  bool popped;
+  uint8_t val = RINGBUFFER_POP (uint8_t, ringbuf, popped);
+  printf ("%c %x %d", val, val, popped);
 
   while (true) 
     {
       uint8_t c = input_getc ();
       putchar (c);
-      printf ("%x", c);
+      // printf ("%x", c);
 
     }
 }
