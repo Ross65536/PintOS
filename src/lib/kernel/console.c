@@ -191,6 +191,12 @@ putchar_have_lock (uint8_t c)
   vga_putc (c);
 }
 
+/** Getline from user. 
+ * If the return value is the same as param n the buffer overflowed, meaning no null terminating character was inserted.
+ * 
+ * @return number of characters read.
+ * 
+ */
 size_t
 kgetline (char* bufptr, size_t n) 
 {
