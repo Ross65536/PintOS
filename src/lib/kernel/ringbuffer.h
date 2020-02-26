@@ -9,17 +9,17 @@
 
 #include <stdbool.h>
 
-/* Ringbuffer data structure. Must be initialized before use */
+/* Ringbuffer data structure. MUST be initialized before use */
 #define RINGBUFFER(T, N) \
   struct ringbuffer_##T \
   { \
-    T data[N]; \
+    T data[N + 1]; \
     int size; \
     int head; \
     int tail; \
   } 
 
-#define __RINGBUFFER_NEXT(val, N) ({ (val + 1) % N; })
+#define __RINGBUFFER_NEXT(val, size) ({ (val + 1) % size; })
 
 
 // internal. Push head
@@ -33,7 +33,7 @@
 
 /* initialize struct (MANDATORY) */ 
 #define RINGBUFFER_INIT(buf, N) \
-  buf.size = N; \
+  buf.size = N + 1; \
   buf.head = 0; \
   buf.tail = 0; 
   // buf.data is not necessary to initialize to 0

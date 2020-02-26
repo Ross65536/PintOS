@@ -1,30 +1,40 @@
 #include <stdbool.h>
 #include <stdio.h>
-#include <kernel/ringbuffer.h>
+#include <kernel/console.h>
+#include <string.h>
 
 #include "kernel_shell.h"
 #include "../devices/input.h"
 
 #define BUFFER_SIZE 256
 
-RINGBUFFER(uint8_t, BUFFER_SIZE);
+#define PROMPT "CS318> "
 
-struct ringbuffer_uint8_t ringbuf;
+bool 
+handle_command(char* line) {
+  if (strcmp(line, "whoami") == 0) 
+    printf ("I am Ros\n");
+  else if (strcmp(line, "exit") == 0) {
+    printf ("Bye bye\n");
+    return false;
+  }
+  else 
+    printf("You entered: %s\n", line);
+
+  return true;
+}
 
 void 
 start_kernel_shell (void) 
 {
-  RINGBUFFER_INIT (ringbuf, BUFFER_SIZE);
-  RINGBUFFER_PUSH (ringbuf, 'Z');
-  bool popped;
-  uint8_t val = RINGBUFFER_POP (uint8_t, ringbuf, popped);
-  printf ("%c %x %d", val, val, popped);
+  char buf[BUFFER_SIZE];
+  bool cont = true;
 
-  while (true) 
+  while (cont) 
     {
-      uint8_t c = input_getc ();
-      putchar (c);
-      // printf ("%x", c);
-
+      printf (PROMPT);
+      size_t num_read = kgetline (buf, BUFFER_SIZE);
+      if (num_read < BUFFER_SIZE) 
+        cont = handle_command(buf);
     }
 }

@@ -36,9 +36,10 @@ test_ringbuffer()
 
   RINGBUFFER_PUSH(buf, 1);
   RINGBUFFER_PUSH(buf, 2);
+  RINGBUFFER_PUSH(buf, 3);
   MU_ASSERT("", RINGBUFFER_IS_FULL(buf));
 
-  RINGBUFFER_PUSH(buf, 3);
+  RINGBUFFER_PUSH(buf, 4);
   MU_ASSERT("", RINGBUFFER_IS_FULL(buf));
 
   bool popped_3;

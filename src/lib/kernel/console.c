@@ -1,6 +1,7 @@
 #include <console.h>
 #include <stdarg.h>
 #include <stdio.h>
+
 #include "devices/serial.h"
 #include "devices/vga.h"
 #include "threads/init.h"
@@ -188,4 +189,47 @@ putchar_have_lock (uint8_t c)
   write_cnt++;
   serial_putc (c);
   vga_putc (c);
+}
+
+size_t
+kgetline (char* bufptr, size_t n) 
+{
+  if (n <= 1) 
+    return 0;
+
+  size_t idx = 0;
+
+  while (true) 
+    {
+      char c = input_getc ();
+
+      bool is_printable = c == '\t' || (c >= 32 && c <= 126);
+      bool is_backspace = c == 8;
+      bool is_newline = c == 13;
+
+      if (is_printable) {
+        putchar(c);
+
+        bufptr[idx] = c;
+        idx++;
+
+        if (idx == n) {
+          return n;
+        }
+      }
+      else if (is_backspace) {
+        if (idx > 0) {
+          putchar(c);
+          idx--;
+        }
+      }
+      else if (is_newline) {
+        printf("\n");
+        bufptr[idx] = '\0';  
+        return idx;
+      } 
+
+    }
+  
+
 }
