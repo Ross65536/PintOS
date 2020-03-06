@@ -6,7 +6,7 @@
 #include "kernel_shell.h"
 #include "../devices/input.h"
 
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 10
 
 #define PROMPT "CS318> "
 
@@ -36,5 +36,8 @@ start_kernel_shell (void)
       size_t num_read = kgetline (buf, BUFFER_SIZE);
       if (num_read < BUFFER_SIZE) 
         cont = handle_command(buf);
+      else {
+        printf("\nERROR: input overflow\n");
+      }
     }
 }
