@@ -22,8 +22,8 @@
 #define INTR_CNT 256
 
 /* The Interrupt Descriptor Table (IDT).  The format is fixed by
-   the CPU.  See [IA32-v3a] sections 5.10 "Interrupt Descriptor
-   Table (IDT)", 5.11 "IDT Descriptors", 5.12.1.2 "Flag Usage By
+   the CPU.  See [IA32-v3a] sections 6.10 "Interrupt Descriptor
+   Table (IDT)", 6.11 "IDT Descriptors", 6.12.1.2 "Flag Usage By
    Exception- or Interrupt-Handler Procedure". */
 static uint64_t idt[INTR_CNT];
 
@@ -282,8 +282,8 @@ pic_end_of_interrupt (int irq)
    or lower-numbered ring.  In practice, DPL==3 allows user mode
    to call into the gate and DPL==0 prevents such calls.  Faults
    and exceptions that occur in user mode still cause gates with
-   DPL==0 to be invoked.  See [IA32-v3a] sections 4.5 "Privilege
-   Levels" and 4.8.1.1 "Accessing Nonconforming Code Segments"
+   DPL==0 to be invoked.  See [IA32-v3a] sections 5.5 "Privilege
+   Levels" and 5.8.1.1 "Accessing Nonconforming Code Segments"
    for further discussion.
 
    TYPE must be either 14 (for an interrupt gate) or 15 (for a

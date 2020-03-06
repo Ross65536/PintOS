@@ -194,7 +194,7 @@ putchar_have_lock (uint8_t c)
 /** Getline from user. 
  * If the return value is the same as param n the buffer overflowed, meaning no null terminating character was inserted.
  * 
- * @return number of characters read.
+ * @return number of characters read. returns arg n if buffer is overflowing.
  * 
  */
 size_t
@@ -220,6 +220,9 @@ kgetline (char* bufptr, size_t n)
         idx++;
 
         if (idx == n) {
+          // make sure string buf is null terminated
+          idx--;
+          bufptr[idx] = '\0';
           return n;
         }
       }
