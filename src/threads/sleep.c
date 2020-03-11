@@ -75,15 +75,14 @@ thread_sleep_tick (int64_t curr_ticks)
   enum intr_level old_level = intr_disable ();
   for (struct list_elem *e = list_begin (&sleeping_threads.sorted_threads); e != list_end (&sleeping_threads.sorted_threads); )
   {
-    struct sleep_node *node = list_entry (e, struct sleep_node, list_elem);
+    struct sleep_node *node = list_entry (e, struct sleep_node, list_elem); 
     if (node->target_tick <= curr_ticks) {
       ASSERT (! sema_no_waiters (&node->waiter));
+      
       sema_up (&node->waiter);
       
-      struct list_elem *curr = e;
-      e = list_next (e);
-      list_remove (curr);
-      destroy_sleep_node (node);
+      e = list_remove (e);
+      // destroy_sleep_node (node);
     } else {
       break;
     }
