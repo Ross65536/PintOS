@@ -56,3 +56,11 @@ make test
 ```
 
 > Note: runtime for tests is userland. Useful for testing pure functions 
+
+To run simulator tests run:
+
+```
+make
+cd build
+make check
+```

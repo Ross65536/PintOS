@@ -143,6 +143,10 @@ sema_self_test (void)
   printf ("done.\n");
 }
 
+bool sema_no_waiters (struct semaphore * sema) {
+  return list_empty(&sema->waiters);
+}
+
 /* Thread function used by sema_self_test(). */
 static void
 sema_test_helper (void *sema_) 

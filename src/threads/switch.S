@@ -14,6 +14,7 @@
 
 .globl switch_threads
 .func switch_threads
+# $esp+20 = struct thread* cur, $esp+24 = struct thread* next 
 switch_threads:
 	# Save caller's register state.
 	#

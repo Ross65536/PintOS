@@ -10,7 +10,7 @@
 
 #define PROMPT "CS318> "
 
-bool 
+static bool 
 handle_command(char* line) {
   if (strcmp(line, "whoami") == 0) 
     printf ("I am Ros\n");
