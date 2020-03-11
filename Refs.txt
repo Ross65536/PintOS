@@ -1,0 +1,4 @@
+Intel Manual:
+V3
+2.5 -> Control Registers
+6 -> Interrupts
