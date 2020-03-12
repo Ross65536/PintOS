@@ -65,6 +65,8 @@ sleep_curr_thread (int64_t target_tick)
   lock_release (&sleeping_threads.list_lock);
 
   sema_down(&node->waiter); // sleep
+
+  destroy_sleep_node (node);
 }
 
 void 
@@ -82,7 +84,6 @@ thread_sleep_tick (int64_t curr_ticks)
       sema_up (&node->waiter);
       
       e = list_remove (e);
-      // destroy_sleep_node (node);
     } else {
       break;
     }
