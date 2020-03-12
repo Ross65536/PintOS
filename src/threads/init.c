@@ -109,6 +109,7 @@ pintos_init (void)
 
   /* Initialize interrupt handlers. */
   intr_init ();
+  sleep_init();
   timer_init ();
   kbd_init ();
   input_init ();

@@ -37,8 +37,6 @@ static void real_time_delay (int64_t num, int32_t denom);
 void
 timer_init (void) 
 {
-  sleep_init();
-  
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -182,7 +180,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
 
-  thread_sleep_tick (ticks);
   thread_tick ();
 }
 

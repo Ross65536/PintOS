@@ -6,24 +6,25 @@
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "threads/interrupt.h"
+#include "devices/timer.h"
 
 struct sleep_node
 {
   struct list_elem list_elem;
   int64_t target_tick;
-  struct semaphore waiter;
+  struct condition waiter;
 };
 
 
 static struct sleep_queue {
   struct list sorted_threads;
-  struct lock list_lock;
+  struct lock monitor_lock;
 } sleeping_threads;
 
 void
 sleep_init (void) {
   list_init (&sleeping_threads.sorted_threads);
-  lock_init (&sleeping_threads.list_lock);
+  lock_init (&sleeping_threads.monitor_lock);
 }
 
 static struct sleep_node *
@@ -31,7 +32,7 @@ new_sleep_node (int64_t target_tick)
 {
   struct sleep_node * node = malloc(sizeof (struct sleep_node));
   node->target_tick = target_tick;
-  sema_init(&node->waiter, 0); 
+  cond_init(&node->waiter); 
 
   return node;
 }
@@ -39,7 +40,7 @@ new_sleep_node (int64_t target_tick)
 static void
 destroy_sleep_node (struct sleep_node * node) 
 {
-  ASSERT (sema_no_waiters(&node->waiter));
+  ASSERT (cond_no_waiters(&node->waiter));
 
   free (node);
 }
@@ -60,33 +61,40 @@ sleep_curr_thread (int64_t target_tick)
   
   struct sleep_node * node = new_sleep_node(target_tick);
 
-  lock_acquire (&sleeping_threads.list_lock);
+  lock_acquire (&sleeping_threads.monitor_lock);
   list_insert_ordered (&sleeping_threads.sorted_threads, &node->list_elem, sleep_node_list_less_func, NULL);
-  lock_release (&sleeping_threads.list_lock);
+  cond_wait(&node->waiter, &sleeping_threads.monitor_lock); // sleep
 
-  sema_down(&node->waiter); // sleep
+  lock_release (&sleeping_threads.monitor_lock);
+
+  destroy_sleep_node (node);
 }
 
 void 
-thread_sleep_tick (int64_t curr_ticks)
+threads_unsleep (void * _ UNUSED)
 {
-  ASSERT (intr_context ());
+  ASSERT (! intr_context ());
+  
+  // printf(".AAAA");
+  int64_t curr_ticks = timer_ticks (); 
 
-  enum intr_level old_level = intr_disable ();
+  lock_acquire (&sleeping_threads.monitor_lock);
+
   for (struct list_elem *e = list_begin (&sleeping_threads.sorted_threads); e != list_end (&sleeping_threads.sorted_threads); )
   {
+    // printf("."); 
     struct sleep_node *node = list_entry (e, struct sleep_node, list_elem); 
     if (node->target_tick <= curr_ticks) {
-      ASSERT (! sema_no_waiters (&node->waiter));
+      ASSERT (! cond_no_waiters (&node->waiter));
       
-      sema_up (&node->waiter);
+      cond_signal (&node->waiter, &sleeping_threads.monitor_lock);
       
       e = list_remove (e);
-      // destroy_sleep_node (node);
     } else {
       break;
     }
   }
-  intr_set_level (old_level);
+
+  lock_release (&sleeping_threads.monitor_lock);
 
 }

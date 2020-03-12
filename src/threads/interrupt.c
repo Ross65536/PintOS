@@ -8,6 +8,7 @@
 #include "threads/io.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/sleep.h"
 #include "devices/timer.h"
 
 /* Programmable Interrupt Controller (PIC) registers.
@@ -383,6 +384,10 @@ intr_handler (struct intr_frame *frame)
 
       in_external_intr = false;
       pic_end_of_interrupt (frame->vec_no); 
+
+      if (frame->vec_no == 0x20) {
+        thread_create ("timer_tail_threads_unsleep", PRI_MAX, threads_unsleep, NULL);
+      }
 
       if (yield_on_return) 
         thread_yield (); 
