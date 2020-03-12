@@ -75,14 +75,12 @@ threads_unsleep (void * _ UNUSED)
 {
   ASSERT (! intr_context ());
   
-  // printf(".AAAA");
   int64_t curr_ticks = timer_ticks (); 
 
   lock_acquire (&sleeping_threads.monitor_lock);
 
   for (struct list_elem *e = list_begin (&sleeping_threads.sorted_threads); e != list_end (&sleeping_threads.sorted_threads); )
   {
-    // printf("."); 
     struct sleep_node *node = list_entry (e, struct sleep_node, list_elem); 
     if (node->target_tick <= curr_ticks) {
       ASSERT (! cond_no_waiters (&node->waiter));

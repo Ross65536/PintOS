@@ -385,12 +385,13 @@ intr_handler (struct intr_frame *frame)
       in_external_intr = false;
       pic_end_of_interrupt (frame->vec_no); 
 
-      if (frame->vec_no == 0x20) {
+      if (frame->vec_no == TIMER_INT_NUM) 
         thread_create ("timer_tail_threads_unsleep", PRI_MAX, threads_unsleep, NULL);
-      }
-
-      if (yield_on_return) 
+        
+      if (yield_on_return) {
+        
         thread_yield (); 
+      }
     }
 }
 
