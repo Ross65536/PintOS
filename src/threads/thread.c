@@ -496,6 +496,15 @@ static bool thread_priority_less (const struct list_elem *left, const struct lis
   return left_pri < right_pri;
 }
 
+struct thread * pop_highest_priority_thread (struct list* thread_list) {
+  ASSERT (! list_empty(thread_list));
+
+  struct list_elem * next_thread = list_max (thread_list, thread_priority_less, NULL);
+  list_remove (next_thread);
+
+  return list_entry (next_thread, struct thread, elem);
+}
+
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
@@ -507,11 +516,7 @@ next_thread_to_run_priority (void)
   if (list_empty (&ready_list))
     return idle_thread;
   
-  struct list_elem * next_thread = list_max (&ready_list, thread_priority_less, NULL);
-  list_remove (next_thread);
-
-
-  return list_entry (next_thread, struct thread, elem);
+  return pop_highest_priority_thread (&ready_list); 
 }
 
 /* Completes a thread switch by activating the new thread's page
