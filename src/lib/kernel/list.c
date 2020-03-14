@@ -522,3 +522,12 @@ list_min (struct list *list, list_less_func *less, void *aux)
     }
   return min;
 }
+
+struct list_elem * pop_max (struct list * list, list_less_func *less_func, void *aux) {
+  ASSERT (! list_empty(list));
+
+  struct list_elem * elem = list_max (list, less_func, aux);
+  list_remove (elem);
+
+  return elem;
+}

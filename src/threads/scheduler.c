@@ -10,11 +10,7 @@ static bool thread_priority_less (const struct list_elem *left, const struct lis
 }
 
 struct thread * pop_highest_priority_thread (struct list* thread_list) {
-  ASSERT (! list_empty(thread_list));
-  ASSERT ( intr_get_level () == INTR_OFF);
-
-  struct list_elem * next_thread = list_max (thread_list, thread_priority_less, NULL);
-  list_remove (next_thread);
+  struct list_elem * next_thread = pop_max (thread_list, thread_priority_less, NULL);
 
   return list_entry (next_thread, struct thread, elem);
 }

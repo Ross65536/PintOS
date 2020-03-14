@@ -307,9 +307,30 @@ cond_wait (struct condition *cond, struct lock *lock)
   
   sema_init (&waiter.semaphore, 0);
   list_push_back (&cond->waiters, &waiter.elem);
+  // TODO make actually atomic
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
+}
+
+static bool cond_waiter_less (const struct list_elem *left, const struct list_elem *right, void *_ UNUSED) {
+  struct semaphore * left_sema = & (list_entry (left, struct semaphore_elem, elem)->semaphore);
+  struct semaphore * right_sema = & (list_entry (right, struct semaphore_elem, elem)->semaphore);
+
+  ASSERT (!sema_no_waiters (left_sema));
+  ASSERT (!sema_no_waiters (right_sema));
+
+  struct thread * left_thread = list_entry (list_front (&left_sema->waiters), struct thread, elem);
+  struct thread * right_thread = list_entry (list_front (&right_sema->waiters), struct thread, elem);
+
+
+  return left_thread->priority < right_thread->priority;
+}
+
+static struct semaphore_elem * pop_highest_priority_cond_var_waiter (struct list* waiters) {
+  struct list_elem * elem = pop_max(waiters, cond_waiter_less, NULL);
+
+  return list_entry (elem, struct semaphore_elem, elem);
 }
 
 /* If any threads are waiting on COND (protected by LOCK), then
@@ -327,9 +348,10 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+  if (!list_empty (&cond->waiters)) {
+    struct semaphore_elem * elem = pop_highest_priority_cond_var_waiter (&cond->waiters);
+    sema_up (&elem->semaphore); // preemption already handled by sema_up
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
