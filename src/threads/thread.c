@@ -611,4 +611,4 @@ void try_undonate_priority (struct list* search_threads, struct thread* target) 
   if (found != NULL) {
     target->priority_donator = NULL;
   }
-}
+} 

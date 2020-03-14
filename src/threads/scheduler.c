@@ -32,20 +32,11 @@ static bool thread_list_eq_func (const struct list_elem *list_elem, const struct
 
 struct thread * find_thread (struct list* threads, struct thread* target) {
 
-  for (struct list_elem* e = list_begin (threads); e != list_end (threads); e = list_next (e)) {
-    struct thraed* found = list_entry (e, struct thread, elem);
-    if (found == target) {
-      return found;
-    }
-  }
+  struct list_elem * found = list_find (threads, thread_list_eq_func, &target->elem, NULL); 
+  if (found == NULL)
+    return NULL;
 
-  return NULL;
-
-  // struct list_elem * found = list_find (threads, thread_list_eq_func, &target->elem, NULL); 
-  // if (found == NULL)
-  //   return NULL;
-
-  // return list_entry (found, struct thread, elem);
+  return list_entry (found, struct thread, elem);
 }
 
 /** Should be followed by call to thread_yield()
