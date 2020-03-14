@@ -41,11 +41,7 @@ struct thread * find_thread (struct list* threads, struct thread* target) {
 /** Should be followed by call to thread_yield()
  */
 bool should_curr_thread_yield_priority (struct thread * other) { 
-  // printf("A");
-  // return cmp_thread_priority (other, thread_current ()) > 0 && !intr_context ();
-
-  const int curr_thread_pri = thread_current ()->priority;
-  return other->priority > curr_thread_pri && !intr_context ();
+  return !intr_context () && cmp_thread_priority (other, thread_current ()) > 0;
 }
 
 static bool cond_waiter_less (const struct list_elem *left, const struct list_elem *right, void *_ UNUSED) {
