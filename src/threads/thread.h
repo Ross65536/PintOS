@@ -154,4 +154,6 @@ int cmp_thread_priority (struct thread* left_t, struct thread* right_t);
       __typeof__ (b) _b = (b); \
    _a > _b ? _a : _b; })
 
+#define MAX_RECURSION 10
+
 #endif /* threads/thread.h */

@@ -591,11 +591,22 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-int thread_priority (struct thread * t) {
-  int donator_pri = t->priority_donator != NULL ? t->priority_donator->priority : 0;
 
+
+static int thread_priority_recursive (struct thread * t, unsigned int max_recursions) {
+  if (t == NULL || max_recursions == 0) {
+    return PRI_MIN;
+  }
+
+  const int donator_pri = thread_priority_recursive (t->priority_donator, max_recursions - 1);
   return MAX(t->priority, donator_pri);
 }
+
+int thread_priority (struct thread * t) {
+  ASSERT (t != NULL);
+  
+  return thread_priority_recursive (t, MAX_RECURSION);
+} 
 
 int cmp_thread_priority (struct thread* left_t, struct thread* right_t) {
   return thread_priority (left_t) - thread_priority (right_t);
