@@ -44,7 +44,9 @@ Running:
 
 ```
 make qemu
+pintos run -- run mytest
 ```
+
 
 ### Testing
 

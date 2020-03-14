@@ -207,10 +207,10 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  // struct thread* curr = thread_current ();
-  // if (lock->holder != NULL && cmp_thread_priority (curr, lock->holder) > 0) {
-  //   donate_priority (curr, lock->holder);
-  // }
+  struct thread* curr = thread_current ();
+  if (lock->holder != NULL && cmp_thread_priority (curr, lock->holder) > 0) {
+    donate_priority (curr, lock->holder);
+  }
 
   sema_down (&lock->semaphore);
 
@@ -250,7 +250,7 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
 
-  // try_undonate_priority (&lock->semaphore.waiters, thread_current());
+  try_undonate_priority (&lock->semaphore.waiters, thread_current());
 
   sema_up (&lock->semaphore);
 }

@@ -349,7 +349,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_priority (thread_current ());
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -606,7 +606,7 @@ void donate_priority (struct thread* donator, struct thread* recepient) {
 }
 
 void try_undonate_priority (struct list* search_threads, struct thread* target) {
-  struct thread * found = find_thread (search_threads, target);
+  struct thread * found = find_thread (search_threads, target->priority_donator);
 
   if (found != NULL) {
     target->priority_donator = NULL;
