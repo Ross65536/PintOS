@@ -202,8 +202,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  const int curr_thread_pri = thread_current()->priority;
-  if (priority > curr_thread_pri) {
+  if (should_curr_thread_yield_priority (t)) {
     thread_yield();
   }
 
@@ -312,6 +311,7 @@ thread_yield (void)
   enum intr_level old_level;
   
   ASSERT (!intr_context ());
+  // ASSERT (interrupts_enabled ());
 
   old_level = intr_disable ();
   if (cur != idle_thread) 

@@ -16,6 +16,8 @@ enum intr_level intr_set_level (enum intr_level);
 enum intr_level intr_enable (void);
 enum intr_level intr_disable (void);
 
+bool interrupts_enabled (void);
+
 /* Interrupt stack frame. */
 struct intr_frame
   {

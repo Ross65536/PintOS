@@ -437,3 +437,7 @@ intr_name (uint8_t vec)
 {
   return intr_names[vec];
 }
+
+bool interrupts_enabled () {
+  return intr_get_level() == INTR_ON;
+}
