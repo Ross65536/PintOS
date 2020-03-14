@@ -63,7 +63,7 @@ static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
-static struct thread *next_thread_to_run (void);
+static struct thread *next_thread_to_run_priority (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
@@ -200,6 +200,12 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  const int curr_thread_pri = thread_current()->priority;
+  if (priority > curr_thread_pri) {
+    thread_yield();
+  }
+
 
   return tid;
 }
@@ -383,7 +389,7 @@ thread_get_recent_cpu (void)
    point it initializes idle_thread, "up"s the semaphore passed
    to it to enable thread_start() to continue, and immediately
    blocks.  After that, the idle thread never appears in the
-   ready list.  It is returned by next_thread_to_run() as a
+   ready list.  It is returned by next_thread_to_run_priority() as a
    special case when the ready list is empty. */
 static void
 idle (void *idle_started_ UNUSED) 
@@ -482,18 +488,30 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
+
+static bool thread_priority_less (const struct list_elem *left, const struct list_elem *right, void *_ UNUSED) {
+  const int left_pri = list_entry (left, struct thread, elem)->priority;
+  const int right_pri = list_entry (right, struct thread, elem)->priority;
+
+  return left_pri < right_pri;
+}
+
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
    will be in the run queue.)  If the run queue is empty, return
    idle_thread. */
 static struct thread *
-next_thread_to_run (void) 
+next_thread_to_run_priority (void) 
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  
+  struct list_elem * next_thread = list_max (&ready_list, thread_priority_less, NULL);
+  list_remove (next_thread);
+
+
+  return list_entry (next_thread, struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -553,7 +571,7 @@ static void
 schedule (void) 
 {
   struct thread *cur = running_thread ();
-  struct thread *next = next_thread_to_run ();
+  struct thread *next = next_thread_to_run_priority ();
   struct thread *prev = NULL;
 
   ASSERT (intr_get_level () == INTR_OFF);
