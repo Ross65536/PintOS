@@ -24,6 +24,7 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -88,6 +89,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    struct thread* priority_donator;
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -137,5 +139,19 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+int thread_priority (struct thread * t);
+void donate_priority (struct thread* donator, struct thread* recepient);
+void try_undonate_priority (struct list* search_threads, struct thread* target);
+
+/**
+ * Reeturn 0 if equal, <0 if left less than right, >0 if left more than right
+ */
+int cmp_thread_priority (struct thread* left_t, struct thread* right_t);
+
+#define MAX(a,b) \
+({ __typeof__ (a) _a = (a); \
+      __typeof__ (b) _b = (b); \
+   _a > _b ? _a : _b; })
 
 #endif /* threads/thread.h */

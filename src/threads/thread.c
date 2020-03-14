@@ -469,6 +469,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->priority_donator = NULL;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -589,3 +590,25 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+int thread_priority (struct thread * t) {
+  int donator_pri = t->priority_donator != NULL ? t->priority_donator->priority : 0;
+
+  return MAX(t->priority, donator_pri);
+}
+
+int cmp_thread_priority (struct thread* left_t, struct thread* right_t) {
+  return thread_priority (left_t) - thread_priority (right_t);
+}
+
+void donate_priority (struct thread* donator, struct thread* recepient) {
+  recepient->priority_donator = donator;
+}
+
+void try_undonate_priority (struct list* search_threads, struct thread* target) {
+  struct thread * found = find_thread (search_threads, target);
+
+  if (found != NULL) {
+    target->priority_donator = NULL;
+  }
+}

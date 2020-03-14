@@ -523,11 +523,22 @@ list_min (struct list *list, list_less_func *less, void *aux)
   return min;
 }
 
-struct list_elem * pop_max (struct list * list, list_less_func *less_func, void *aux) {
+struct list_elem * list_pop_max (struct list * list, list_less_func *less_func, void *aux) {
   ASSERT (! list_empty(list));
 
   struct list_elem * elem = list_max (list, less_func, aux);
   list_remove (elem);
 
   return elem;
+}
+
+struct list_elem * list_find (struct list * list, list_eq_func * eq, struct list_elem *target, void *aux) {
+  
+  for (struct list_elem* e = list_begin (list); e != list_end (list); e = list_next (e)) {
+    if (eq(e, target, aux)) {
+      return e;
+    }
+  }
+
+  return NULL;
 }
