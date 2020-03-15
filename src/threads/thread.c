@@ -473,6 +473,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   ARRAY_INIT(t->priority_donors, DONORS_ARR_SIZE);
+  lock_init (&t->priority_donors_lock);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -600,11 +601,13 @@ static int thread_priority_recursive (struct thread * t, unsigned int max_recurs
     return PRI_MIN;
   }
 
+  lock_acquire (&t->priority_donors_lock);
   int max_pri = t->priority;
   for (size_t i = 0; i < t->priority_donors.curr_size; i++) {
     const int parent_pri = thread_priority_recursive (t->priority_donors.data[i], max_recursions - 1);
     max_pri = MAX(max_pri, parent_pri); 
   }
+  lock_release (&t->priority_donors_lock);
 
   return max_pri;
 }
@@ -620,10 +623,15 @@ int cmp_thread_priority (struct thread* left_t, struct thread* right_t) {
 }
 
 void donate_priority (struct thread* donator, struct thread* recepient) {
+  lock_acquire (&recepient->priority_donors_lock);
   ARRAY_TRY_PUSH (recepient->priority_donors, donator);
+  lock_release (&recepient->priority_donors_lock);
+
 }
 
 void try_undonate_priority (struct list* search_threads, struct thread* target) {
+  lock_acquire (&target->priority_donors_lock);
+
   for (size_t i = 0; i < target->priority_donors.curr_size; ) {
     struct thread * found = find_thread (search_threads, target->priority_donors.data[i]);
     if (found != NULL) {
@@ -632,4 +640,6 @@ void try_undonate_priority (struct list* search_threads, struct thread* target) 
       i++;
     } 
   }
+
+  lock_release (&target->priority_donors_lock);
 } 

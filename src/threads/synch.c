@@ -250,7 +250,8 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
 
-  try_undonate_priority (&lock->semaphore.waiters, thread_current());
+  if (! list_empty(&lock->semaphore.waiters))
+    try_undonate_priority (&lock->semaphore.waiters, thread_current());
 
   sema_up (&lock->semaphore);
 }

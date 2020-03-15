@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include <kernel/array.h>
+#include "synch.h"
 
 #define DONORS_ARR_SIZE 8
 
@@ -95,6 +96,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    struct lock priority_donors_lock;
     struct array_thread_arr priority_donors;
     struct list_elem allelem;           /* List element for all threads list. */
 
