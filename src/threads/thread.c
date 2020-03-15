@@ -346,10 +346,11 @@ void
 thread_set_priority (int new_priority) 
 {
   const int curr_pri = thread_get_priority();
+  
+  // TODO maybe add lock here? Is it necessary?
   thread_current ()->priority = new_priority;
-
+  
   const int new_pri = thread_get_priority();
-
   if (new_pri < curr_pri)
     thread_yield ();
 }
