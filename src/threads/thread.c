@@ -1,9 +1,11 @@
 #include "threads/thread.h"
+
 #include <debug.h>
 #include <stddef.h>
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <kernel/array.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -12,6 +14,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/scheduler.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -469,7 +472,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->priority_donator = NULL;
+  ARRAY_INIT(t->priority_donors, DONORS_ARR_SIZE);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -592,19 +595,23 @@ allocate_tid (void)
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
-
 static int thread_priority_recursive (struct thread * t, unsigned int max_recursions) {
   if (t == NULL || max_recursions == 0) {
     return PRI_MIN;
   }
 
-  const int donator_pri = thread_priority_recursive (t->priority_donator, max_recursions - 1);
-  return MAX(t->priority, donator_pri);
+  int max_pri = t->priority;
+  for (size_t i = 0; i < t->priority_donors.curr_size; i++) {
+    const int parent_pri = thread_priority_recursive (t->priority_donors.data[i], max_recursions - 1);
+    max_pri = MAX(max_pri, parent_pri); 
+  }
+
+  return max_pri;
 }
 
 int thread_priority (struct thread * t) {
   ASSERT (t != NULL);
-  
+
   return thread_priority_recursive (t, MAX_RECURSION);
 } 
 
@@ -613,13 +620,16 @@ int cmp_thread_priority (struct thread* left_t, struct thread* right_t) {
 }
 
 void donate_priority (struct thread* donator, struct thread* recepient) {
-  recepient->priority_donator = donator;
+  ARRAY_TRY_PUSH (recepient->priority_donors, donator);
 }
 
 void try_undonate_priority (struct list* search_threads, struct thread* target) {
-  struct thread * found = find_thread (search_threads, target->priority_donator);
-
-  if (found != NULL) {
-    target->priority_donator = NULL;
+  for (size_t i = 0; i < target->priority_donors.curr_size; ) {
+    struct thread * found = find_thread (search_threads, target->priority_donors.data[i]);
+    if (found != NULL) {
+      ARRAY_REMOVE(target->priority_donors, i);
+    } else {
+      i++;
+    } 
   }
 } 

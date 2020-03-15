@@ -4,6 +4,12 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <kernel/array.h>
+
+#define DONORS_ARR_SIZE 8
+
+struct thread;
+ARRAY_TYPE(thread_arr, struct thread *, DONORS_ARR_SIZE);
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -89,7 +95,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    struct thread* priority_donator;
+    struct array_thread_arr priority_donors;
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */

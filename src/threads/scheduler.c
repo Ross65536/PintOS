@@ -13,11 +13,6 @@ static bool thread_priority_less (const struct list_elem *left, const struct lis
   struct thread* right_t = list_entry (right, struct thread, elem);
 
   return cmp_thread_priority (left_t, right_t) < 0;
-  
-  // const int left_pri = thread_priority(left_t);
-  // const int right_pri = thread_priority(right_t);
-
-  // return left_pri < right_pri;
 }
 
 struct thread * pop_highest_priority_thread (struct list* thread_list) {
