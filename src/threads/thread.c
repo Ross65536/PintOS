@@ -641,6 +641,7 @@ void try_undonate_priority (struct list* search_threads, struct thread* target) 
   for (size_t i = 0; i < target->priority_donors.curr_size; ) {
     struct thread * found = find_thread (search_threads, target->priority_donors.data[i]);
     if (found != NULL) {
+      
       ARRAY_REMOVE(target->priority_donors, i);
     } else {
       i++;

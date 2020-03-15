@@ -35,8 +35,8 @@
   ASSERT (index >= 0); \
   const bool can_remove = index < arr.curr_size && ! ARRAY_IS_EMPTY (arr); \
   if (can_remove) { \
-      for (size_t i = index; i < arr.curr_size - 1; i++) { \
-        arr.data[i] = arr.data[i + 1]; \
+      for (size_t __idx = index; __idx < arr.curr_size - 1; __idx++) { \
+        arr.data[__idx] = arr.data[__idx + 1]; \
       } \
       arr.curr_size--; \
   } \
