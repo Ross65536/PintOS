@@ -205,7 +205,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  if (rr_should_curr_thread_yield_priority (t)) {
+  if (should_curr_thread_yield_priority (t)) {
     thread_yield();
   }
 
@@ -477,9 +477,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   
-  t->priority = PRI_DEFAULT;
   if (thread_mlfqs) {
-
+    rr_thread_init (t, priority);
+    t->priority = PRI_DEFAULT;
   } else {
     rr_thread_init (t, priority);
   }
