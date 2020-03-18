@@ -6,24 +6,13 @@
 
 #define MAX_RECURSION 10
 
-/**
- * Reeturn 0 if equal, <0 if left less than right, >0 if left more than right
- */
-static int rr_cmp_thread_priority (struct thread* left_t, struct thread* right_t) {
-  return rr_thread_priority (left_t) - rr_thread_priority (right_t);
-}
 
-static bool rr_thread_priority_less (const struct list_elem *left, const struct list_elem *right, void *_ UNUSED) {
-  struct thread* left_t = list_entry (left, struct thread, elem);
-  struct thread* right_t = list_entry (right, struct thread, elem);
+/* List of processes in THREAD_READY state, that is, processes
+   that are ready to run but not actually running. */
+static struct list ready_list;
 
-  return rr_cmp_thread_priority (left_t, right_t) < 0;
-}
-
-struct thread * rr_pop_highest_priority_thread (struct list* thread_list) {
-  struct list_elem * next_thread = list_pop_max (thread_list, rr_thread_priority_less, NULL);
-
-  return list_entry (next_thread, struct thread, elem);
+void rr_scheduler_init (void) {
+  list_init (&ready_list);
 }
 
 static bool thread_list_eq_func (const struct list_elem *list_elem, const struct list_elem *target, void *aux UNUSED) {
@@ -38,32 +27,6 @@ static struct thread * find_thread (struct list* threads, struct thread* target)
 
   return list_entry (found, struct thread, elem);
 }
-
-/** Should be followed by call to thread_yield()
- */
-bool rr_should_curr_thread_yield_priority (struct thread * other) { 
-  return !intr_context () && rr_cmp_thread_priority (other, thread_current ()) > 0;
-}
-
-static bool rr_cond_waiter_less (const struct list_elem *left, const struct list_elem *right, void *_ UNUSED) {
-  struct semaphore * left_sema = & (list_entry (left, struct semaphore_elem, elem)->semaphore);
-  struct semaphore * right_sema = & (list_entry (right, struct semaphore_elem, elem)->semaphore);
-
-  ASSERT (!sema_no_waiters (left_sema));
-  ASSERT (!sema_no_waiters (right_sema)); 
-
-  struct thread * left_thread = list_entry (list_front (&left_sema->waiters), struct thread, elem);
-  struct thread * right_thread = list_entry (list_front (&right_sema->waiters), struct thread, elem);
-
-  return rr_cmp_thread_priority (left_thread, right_thread) < 0;
-}
-
-struct semaphore_elem * rr_pop_highest_priority_cond_var_waiter (struct list* waiters) {
-  struct list_elem * elem = list_pop_max(waiters, rr_cond_waiter_less, NULL);
-
-  return list_entry (elem, struct semaphore_elem, elem);
-}
-
 
 static int rr_thread_priority_recursive (struct thread * t, unsigned int max_recursions) {
   if (t == NULL || max_recursions == 0) {
@@ -130,4 +93,16 @@ rr_thread_init (struct thread *t, int priority) {
   t->priority = priority;
   ARRAY_INIT(t->rr_thread_block.priority_donors, DONORS_ARR_SIZE);
   lock_init (&t->rr_thread_block.priority_donors_lock);
+}
+
+void rr_insert_ready_thread (struct thread* t) {
+  list_push_back (&ready_list, &t->elem);
+}
+
+struct thread * rr_next_thread_to_run (void) 
+{
+  if (list_empty (&ready_list))
+    return NULL;
+  
+  return pop_highest_priority_thread (&ready_list); 
 }

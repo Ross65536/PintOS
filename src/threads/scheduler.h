@@ -14,11 +14,7 @@ struct rr_thread_block {
   struct array_thread_arr priority_donors;
 };
 
-struct thread * rr_pop_highest_priority_thread (struct list* thread_list);
-
-bool rr_should_curr_thread_yield_priority (struct thread * other);
-
-struct semaphore_elem * rr_pop_highest_priority_cond_var_waiter (struct list* waiters);
+void rr_scheduler_init (void);
 
 int rr_thread_priority (struct thread * t);
 
@@ -29,5 +25,9 @@ void rr_try_undonate_priority (struct list* search_threads, struct thread* targe
 void rr_thread_set_priority (int new_priority);
 
 void rr_thread_init (struct thread *t, int priority);
+
+void rr_insert_ready_thread (struct thread* t);
+
+struct thread * rr_next_thread_to_run (void);
 
 #endif

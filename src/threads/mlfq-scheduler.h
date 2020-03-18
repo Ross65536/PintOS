@@ -3,9 +3,9 @@
 
 #include "scheduler.h"
 
-struct thread * mlfq_pop_highest_priority_thread (struct list* thread_list);
-bool mlfq_should_curr_thread_yield_priority (struct thread * other);
-struct semaphore_elem * mlfq_pop_highest_priority_cond_var_waiter (struct list* waiters);
+void mlfq_scheduler_init (void);
 int mlfq_thread_priority (struct thread* t);
-
+struct thread * mlfq_next_thread_to_run (void);
+void mlfq_insert_ready_thread (struct thread* t);
+void mlfq_thread_init (struct thread *t);
 #endif

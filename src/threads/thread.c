@@ -25,9 +25,7 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
-/* List of processes in THREAD_READY state, that is, processes
-   that are ready to run but not actually running. */
-static struct list ready_list;
+static void insert_ready_thread (struct thread* t);
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -68,7 +66,7 @@ static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
-static struct thread *next_thread_to_run_priority (void);
+static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
@@ -95,8 +93,13 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
-  list_init (&ready_list);
   list_init (&all_list);
+
+  if (thread_mlfqs) {
+    mlfq_scheduler_init ();
+  } else {
+    rr_scheduler_init ();
+  }
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -247,7 +250,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  insert_ready_thread (t);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -315,11 +318,10 @@ thread_yield (void)
   enum intr_level old_level;
   
   ASSERT (!intr_context ());
-  // ASSERT (interrupts_enabled ());
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    insert_ready_thread (cur);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -399,7 +401,7 @@ thread_get_recent_cpu (void)
    point it initializes idle_thread, "up"s the semaphore passed
    to it to enable thread_start() to continue, and immediately
    blocks.  After that, the idle thread never appears in the
-   ready list.  It is returned by next_thread_to_run_priority() as a
+   ready list.  It is returned by next_thread_to_run() as a
    special case when the ready list is empty. */
 static void
 idle (void *idle_started_ UNUSED) 
@@ -479,8 +481,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   
   if (thread_mlfqs) {
-    rr_thread_init (t, priority);
-    t->priority = PRI_DEFAULT;
+    mlfq_thread_init (t);
   } else {
     rr_thread_init (t, priority);
   }
@@ -505,19 +506,7 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
-/* Chooses and returns the next thread to be scheduled.  Should
-   return a thread from the run queue, unless the run queue is
-   empty.  (If the running thread can continue running, then it
-   will be in the run queue.)  If the run queue is empty, return
-   idle_thread. */
-static struct thread *
-next_thread_to_run_priority (void) 
-{
-  if (list_empty (&ready_list))
-    return idle_thread;
-  
-  return rr_pop_highest_priority_thread (&ready_list); 
-}
+
 
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
@@ -576,7 +565,7 @@ static void
 schedule (void) 
 {
   struct thread *cur = running_thread ();
-  struct thread *next = next_thread_to_run_priority ();
+  struct thread *next = next_thread_to_run ();
   struct thread *prev = NULL;
 
   ASSERT (intr_get_level () == INTR_OFF);
@@ -602,28 +591,79 @@ allocate_tid (void)
   return tid;
 }
 
-/* Offset of `stack' member within `struct thread'.
-   Used by switch.S, which can't figure it out on its own. */
-uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-struct thread * pop_highest_priority_thread (struct list* thread_list) {
-  if (thread_mlfqs)
-    return mlfq_pop_highest_priority_thread (thread_list);
-  else
-    return rr_pop_highest_priority_thread (thread_list);
+/* Chooses and returns the next thread to be scheduled.  Should
+   return a thread from the run queue, unless the run queue is
+   empty.  (If the running thread can continue running, then it
+   will be in the run queue.)  If the run queue is empty, return
+   idle_thread. */
+static struct thread *
+next_thread_to_run (void) 
+{
+  struct thread* t = thread_mlfqs ? mlfq_next_thread_to_run () : rr_next_thread_to_run ();
+  if (t == NULL)
+    return idle_thread;
+
+  return t;
 }
 
+static int thread_priority (struct thread* t) {
+  if (thread_mlfqs)
+    return mlfq_thread_priority (t);
+  else 
+    return rr_thread_priority (t);
+}
+
+static int cmp_thread_priority (struct thread* left_t, struct thread* right_t) {
+  return thread_priority (left_t) - thread_priority (right_t);
+}
+
+static bool thread_priority_less (const struct list_elem *left, const struct list_elem *right, void *_ UNUSED) {
+  struct thread* left_t = list_entry (left, struct thread, elem);
+  struct thread* right_t = list_entry (right, struct thread, elem);
+
+  return cmp_thread_priority (left_t, right_t) < 0;
+}
+
+struct thread * pop_highest_priority_thread (struct list* thread_list) {
+  struct list_elem * next_thread = list_pop_max (thread_list, thread_priority_less, NULL);
+
+  return list_entry (next_thread, struct thread, elem);
+}
+
+/** Should be followed by call to thread_yield()
+ */
 bool should_curr_thread_yield_priority (struct thread * other) {
-  if (thread_mlfqs) {
-    return mlfq_should_curr_thread_yield_priority (other);
-  } else { 
-    return rr_should_curr_thread_yield_priority (other);
-  }
+  return !intr_context () && cmp_thread_priority (other, thread_current ()) > 0;
+}
+
+static bool cond_waiter_less (const struct list_elem *left, const struct list_elem *right, void *_ UNUSED) {
+  struct semaphore * left_sema = & (list_entry (left, struct semaphore_elem, elem)->semaphore);
+  struct semaphore * right_sema = & (list_entry (right, struct semaphore_elem, elem)->semaphore);
+
+  ASSERT (!sema_no_waiters (left_sema));
+  ASSERT (!sema_no_waiters (right_sema)); 
+
+  struct thread * left_thread = list_entry (list_front (&left_sema->waiters), struct thread, elem);
+  struct thread * right_thread = list_entry (list_front (&right_sema->waiters), struct thread, elem);
+
+  return cmp_thread_priority (left_thread, right_thread) < 0;
 }
 
 struct semaphore_elem * pop_highest_priority_cond_var_waiter (struct list* waiters) {
-  if (thread_mlfqs)
-    return mlfq_pop_highest_priority_cond_var_waiter (waiters);
-  else 
-    return rr_pop_highest_priority_cond_var_waiter (waiters);
+  struct list_elem * elem = list_pop_max(waiters, cond_waiter_less, NULL);
+
+  return list_entry (elem, struct semaphore_elem, elem);
 } 
+
+static void insert_ready_thread (struct thread* t) {
+  if (thread_mlfqs)
+    mlfq_insert_ready_thread (t);
+  else 
+    rr_insert_ready_thread (t);
+}
+
+
+/* Offset of `stack' member within `struct thread'.
+   Used by switch.S, which can't figure it out on its own. */
+uint32_t thread_stack_ofs = offsetof (struct thread, stack);
