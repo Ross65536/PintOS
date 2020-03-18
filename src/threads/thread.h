@@ -149,6 +149,10 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 
+struct thread * pop_highest_priority_thread (struct list* thread_list);
+bool should_curr_thread_yield_priority (struct thread * other);
+struct semaphore_elem * pop_highest_priority_cond_var_waiter (struct list* waiters);
+
 #define MAX(a,b) \
 ({ __typeof__ (a) _a = (a); \
       __typeof__ (b) _b = (b); \

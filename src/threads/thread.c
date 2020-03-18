@@ -357,7 +357,7 @@ thread_get_priority (void)
   if (thread_mlfqs) 
     return thread_current ()->priority;
   else
-    return thread_priority (thread_current ());
+    return rr_thread_priority (thread_current ());
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -606,3 +606,14 @@ allocate_tid (void)
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
+struct thread * pop_highest_priority_thread (struct list* thread_list) {
+  return rr_pop_highest_priority_thread (thread_list);
+}
+
+bool should_curr_thread_yield_priority (struct thread * other) {
+  return rr_should_curr_thread_yield_priority (other);
+}
+
+struct semaphore_elem * pop_highest_priority_cond_var_waiter (struct list* waiters) {
+  return rr_pop_highest_priority_cond_var_waiter (waiters);
+}

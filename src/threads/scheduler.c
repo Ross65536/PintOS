@@ -6,7 +6,12 @@
 
 #define MAX_RECURSION 10
 
-
+/**
+ * Reeturn 0 if equal, <0 if left less than right, >0 if left more than right
+ */
+static int rr_cmp_thread_priority (struct thread* left_t, struct thread* right_t) {
+  return rr_thread_priority (left_t) - rr_thread_priority (right_t);
+}
 
 static bool thread_priority_less (const struct list_elem *left, const struct list_elem *right, void *_ UNUSED) {
   struct thread* left_t = list_entry (left, struct thread, elem);
@@ -25,7 +30,7 @@ static bool thread_list_eq_func (const struct list_elem *list_elem, const struct
   return list_elem == target;
 }
 
-struct thread * find_thread (struct list* threads, struct thread* target) {
+static struct thread * find_thread (struct list* threads, struct thread* target) {
 
   struct list_elem * found = list_find (threads, thread_list_eq_func, &target->elem, NULL); 
   if (found == NULL)
@@ -60,7 +65,7 @@ struct semaphore_elem * rr_pop_highest_priority_cond_var_waiter (struct list* wa
 }
 
 
-static int thread_priority_recursive (struct thread * t, unsigned int max_recursions) {
+static int rr_thread_priority_recursive (struct thread * t, unsigned int max_recursions) {
   if (t == NULL || max_recursions == 0) {
     return PRI_MIN;
   }
@@ -68,7 +73,7 @@ static int thread_priority_recursive (struct thread * t, unsigned int max_recurs
   lock_acquire (&t->priority_donors_lock);
   int max_pri = t->priority;
   for (size_t i = 0; i < t->priority_donors.curr_size; i++) {
-    const int parent_pri = thread_priority_recursive (t->priority_donors.data[i], max_recursions - 1);
+    const int parent_pri = rr_thread_priority_recursive (t->priority_donors.data[i], max_recursions - 1);
     max_pri = MAX(max_pri, parent_pri); 
   }
   lock_release (&t->priority_donors_lock);
@@ -77,15 +82,14 @@ static int thread_priority_recursive (struct thread * t, unsigned int max_recurs
 }
 
 
-int thread_priority (struct thread * t) {
+int rr_thread_priority (struct thread * t) {
   ASSERT (t != NULL);
 
-  return thread_priority_recursive (t, MAX_RECURSION);
+  return rr_thread_priority_recursive (t, MAX_RECURSION);
 } 
 
-int rr_cmp_thread_priority (struct thread* left_t, struct thread* right_t) {
-  return thread_priority (left_t) - thread_priority (right_t);
-}
+
+
 
 void rr_try_donate_priority (struct thread* donator, struct thread* recepient) {
   
