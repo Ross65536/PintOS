@@ -70,13 +70,13 @@ static int rr_thread_priority_recursive (struct thread * t, unsigned int max_rec
     return PRI_MIN;
   }
 
-  lock_acquire (&t->priority_donors_lock);
+  lock_acquire (&t->rr_thread_block.priority_donors_lock);
   int max_pri = t->priority;
-  for (size_t i = 0; i < t->priority_donors.curr_size; i++) {
-    const int parent_pri = rr_thread_priority_recursive (t->priority_donors.data[i], max_recursions - 1);
+  for (size_t i = 0; i < t->rr_thread_block.priority_donors.curr_size; i++) {
+    const int parent_pri = rr_thread_priority_recursive (t->rr_thread_block.priority_donors.data[i], max_recursions - 1);
     max_pri = MAX(max_pri, parent_pri); 
   }
-  lock_release (&t->priority_donors_lock);
+  lock_release (&t->rr_thread_block.priority_donors_lock);
 
   return max_pri;
 }
@@ -93,26 +93,26 @@ int rr_thread_priority (struct thread * t) {
 
 void rr_try_donate_priority (struct thread* donator, struct thread* recepient) {
   
-  lock_acquire (&recepient->priority_donors_lock);
-  ARRAY_TRY_PUSH (recepient->priority_donors, donator);
-  lock_release (&recepient->priority_donors_lock);
+  lock_acquire (&recepient->rr_thread_block.priority_donors_lock);
+  ARRAY_TRY_PUSH (recepient->rr_thread_block.priority_donors, donator);
+  lock_release (&recepient->rr_thread_block.priority_donors_lock);
 
 }
 
 void rr_try_undonate_priority (struct list* search_threads, struct thread* target) {
-  lock_acquire (&target->priority_donors_lock);
+  lock_acquire (&target->rr_thread_block.priority_donors_lock);
 
-  for (size_t i = 0; i < target->priority_donors.curr_size; ) {
-    struct thread * found = find_thread (search_threads, target->priority_donors.data[i]);
+  for (size_t i = 0; i < target->rr_thread_block.priority_donors.curr_size; ) {
+    struct thread * found = find_thread (search_threads, target->rr_thread_block.priority_donors.data[i]);
     if (found != NULL) {
       
-      ARRAY_REMOVE(target->priority_donors, i);
+      ARRAY_REMOVE(target->rr_thread_block.priority_donors, i);
     } else {
       i++;
     } 
   }
 
-  lock_release (&target->priority_donors_lock);
+  lock_release (&target->rr_thread_block.priority_donors_lock);
 } 
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -132,6 +132,6 @@ rr_thread_set_priority (int new_priority)
 void 
 rr_thread_init (struct thread *t, int priority) {
   t->priority = priority;
-  ARRAY_INIT(t->priority_donors, DONORS_ARR_SIZE);
-  lock_init (&t->priority_donors_lock);
+  ARRAY_INIT(t->rr_thread_block.priority_donors, DONORS_ARR_SIZE);
+  lock_init (&t->rr_thread_block.priority_donors_lock);
 }
