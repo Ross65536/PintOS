@@ -205,7 +205,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  if (should_curr_thread_yield_priority (t)) {
+  if (rr_should_curr_thread_yield_priority (t)) {
     thread_yield();
   }
 
@@ -345,21 +345,19 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  const int curr_pri = thread_get_priority();
-  
-  // TODO maybe add lock here? Is it necessary?
-  thread_current ()->priority = new_priority;
-  
-  const int new_pri = thread_get_priority();
-  if (new_pri < curr_pri)
-    thread_yield ();
+  if (! thread_mlfqs) {
+    return rr_thread_set_priority (new_priority);
+  }
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_priority (thread_current ());
+  if (thread_mlfqs) 
+    return thread_current ()->priority;
+  else
+    return thread_priority (thread_current ());
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -478,9 +476,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
-  ARRAY_INIT(t->priority_donors, DONORS_ARR_SIZE);
-  lock_init (&t->priority_donors_lock);
+  
+  t->priority = PRI_DEFAULT;
+  if (thread_mlfqs) {
+
+  } else {
+    rr_thread_init (t, priority);
+  }
+
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -512,7 +515,7 @@ next_thread_to_run_priority (void)
   if (list_empty (&ready_list))
     return idle_thread;
   
-  return pop_highest_priority_thread (&ready_list); 
+  return rr_pop_highest_priority_thread (&ready_list); 
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -603,51 +606,3 @@ allocate_tid (void)
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
-static int thread_priority_recursive (struct thread * t, unsigned int max_recursions) {
-  if (t == NULL || max_recursions == 0) {
-    return PRI_MIN;
-  }
-
-  lock_acquire (&t->priority_donors_lock);
-  int max_pri = t->priority;
-  for (size_t i = 0; i < t->priority_donors.curr_size; i++) {
-    const int parent_pri = thread_priority_recursive (t->priority_donors.data[i], max_recursions - 1);
-    max_pri = MAX(max_pri, parent_pri); 
-  }
-  lock_release (&t->priority_donors_lock);
-
-  return max_pri;
-}
-
-int thread_priority (struct thread * t) {
-  ASSERT (t != NULL);
-
-  return thread_priority_recursive (t, MAX_RECURSION);
-} 
-
-int cmp_thread_priority (struct thread* left_t, struct thread* right_t) {
-  return thread_priority (left_t) - thread_priority (right_t);
-}
-
-void donate_priority (struct thread* donator, struct thread* recepient) {
-  lock_acquire (&recepient->priority_donors_lock);
-  ARRAY_TRY_PUSH (recepient->priority_donors, donator);
-  lock_release (&recepient->priority_donors_lock);
-
-}
-
-void try_undonate_priority (struct list* search_threads, struct thread* target) {
-  lock_acquire (&target->priority_donors_lock);
-
-  for (size_t i = 0; i < target->priority_donors.curr_size; ) {
-    struct thread * found = find_thread (search_threads, target->priority_donors.data[i]);
-    if (found != NULL) {
-      
-      ARRAY_REMOVE(target->priority_donors, i);
-    } else {
-      i++;
-    } 
-  }
-
-  lock_release (&target->priority_donors_lock);
-} 

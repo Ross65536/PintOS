@@ -148,20 +148,12 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-int thread_priority (struct thread * t);
-void donate_priority (struct thread* donator, struct thread* recepient);
-void try_undonate_priority (struct list* search_threads, struct thread* target);
-
-/**
- * Reeturn 0 if equal, <0 if left less than right, >0 if left more than right
- */
-int cmp_thread_priority (struct thread* left_t, struct thread* right_t);
 
 #define MAX(a,b) \
 ({ __typeof__ (a) _a = (a); \
       __typeof__ (b) _b = (b); \
    _a > _b ? _a : _b; })
 
-#define MAX_RECURSION 10
+
 
 #endif /* threads/thread.h */
