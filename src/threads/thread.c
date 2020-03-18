@@ -14,6 +14,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/scheduler.h"
+#include "threads/mlfq-scheduler.h"
 
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -355,7 +356,7 @@ int
 thread_get_priority (void) 
 {
   if (thread_mlfqs) 
-    return thread_current ()->priority;
+    return mlfq_thread_priority (thread_current ());
   else
     return rr_thread_priority (thread_current ());
 }
@@ -605,15 +606,24 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-
 struct thread * pop_highest_priority_thread (struct list* thread_list) {
-  return rr_pop_highest_priority_thread (thread_list);
+  if (thread_mlfqs)
+    return mlfq_pop_highest_priority_thread (thread_list);
+  else
+    return rr_pop_highest_priority_thread (thread_list);
 }
 
 bool should_curr_thread_yield_priority (struct thread * other) {
-  return rr_should_curr_thread_yield_priority (other);
+  if (thread_mlfqs) {
+    return mlfq_should_curr_thread_yield_priority (other);
+  } else { 
+    return rr_should_curr_thread_yield_priority (other);
+  }
 }
 
 struct semaphore_elem * pop_highest_priority_cond_var_waiter (struct list* waiters) {
-  return rr_pop_highest_priority_cond_var_waiter (waiters);
-}
+  if (thread_mlfqs)
+    return mlfq_pop_highest_priority_cond_var_waiter (waiters);
+  else 
+    return rr_pop_highest_priority_cond_var_waiter (waiters);
+} 
