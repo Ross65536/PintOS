@@ -109,10 +109,12 @@ void mlfq_insert_ready_thread (struct thread* t) {
 
   ASSERT (pri >= PRI_MIN && pri <= PRI_MAX);
 
-  lock_acquire (&mlfqs_lock);
+  enum intr_level old_level = intr_disable ();
+  // lock_acquire (&mlfqs_lock);
   list_push_back (&mlfqs[pri], &t->elem);
   ready_threads++;
-  lock_release (&mlfqs_lock);
+  // lock_release (&mlfqs_lock);
+  intr_set_level (old_level);
 } 
 
 void mlfq_thread_set_nice (int nice) {
