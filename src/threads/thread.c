@@ -130,7 +130,7 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
-  const bool is_idle = t == idle_thread;
+  const bool is_idle = is_idle_thread (t);
 
   /* Update statistics. */
   if (is_idle)

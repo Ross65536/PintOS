@@ -137,7 +137,7 @@ int mlfq_thread_get_nice (struct thread* t) {
 
 int mlfq_get_load_avg () {
   struct fixed_point real = fixed_point_mult_int (load_avg, 100);
-  return fixed_point_to_int (real);
+  return fixed_point_to_nearest_int (real);
 }
 
 static void mlfq_thread_quantum_priority_update_func (struct thread *t, void *aux UNUSED) {
@@ -167,12 +167,12 @@ static void mlfq_thread_recent_cpu_update (struct thread *t, void *aux UNUSED) {
 }
 
 static void update_load_avg (void) {
-  int num_ready_threads = ready_threads + 1; // 1 for running thread
+  int num_ready_threads = ready_threads; // 1 for running thread
+
   struct thread* t = running_thread ();
   if (t->status == THREAD_RUNNING && !is_idle_thread (t)) {
     num_ready_threads++;
   }
-
 
   struct fixed_point ready_real = fixed_point_build (num_ready_threads);
   ready_real = fixed_point_div_int (ready_real, 60);
@@ -182,6 +182,7 @@ static void update_load_avg (void) {
   struct fixed_point load_real = fixed_point_mult_real (load_avg, load_coeff);
 
   load_avg = fixed_point_add_real (load_real, ready_real);
+  // printf ("|%d|", num_ready_threads);
 }
 
 void mlfq_thread_second_tick (void) {
