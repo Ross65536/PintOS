@@ -13,7 +13,7 @@ struct fixed_point {
   int32_t value;
 };
 
-static inline fixed_point fixed_point_build (int n) {
+static inline struct fixed_point fixed_point_build (int n) {
   struct fixed_point ret = {
     n * __F
   };

@@ -23,6 +23,9 @@ enum thread_status
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
+/* Scheduling. */
+#define TIME_SLICE 4            /* # of timer ticks to give each thread. */
+
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
@@ -151,12 +154,16 @@ struct semaphore_elem * pop_highest_priority_cond_var_waiter (struct list* waite
 
 struct thread * running_thread (void);
 
+void thread_quantum_tick (void);
+void thread_tick_tail (void);
+
+
+
 
 #define MAX(a,b) \
 ({ __typeof__ (a) _a = (a); \
       __typeof__ (b) _b = (b); \
    _a > _b ? _a : _b; })
-
 
 
 #endif /* threads/thread.h */

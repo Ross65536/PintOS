@@ -15,6 +15,7 @@
 #include "threads/vaddr.h"
 #include "threads/scheduler.h"
 #include "threads/mlfq-scheduler.h"
+#include "devices/timer.h"
 
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -53,8 +54,6 @@ static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
 
-/* Scheduling. */
-#define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
 /* If false (default), use round-robin scheduler.
@@ -131,9 +130,10 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
+  const bool is_idle = t == idle_thread;
 
   /* Update statistics. */
-  if (t == idle_thread)
+  if (is_idle)
     idle_ticks++;
 #ifdef USERPROG
   else if (t->pagedir != NULL)
@@ -141,6 +141,9 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  if (thread_mlfqs && ! is_idle)
+    mlfq_thread_tick (&t->thread_mlfq_block);
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -389,8 +392,10 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  if (!thread_mlfqs) 
+    return 0;
+
+  return mlfq_thread_get_load_avg (running_thread ());
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -670,6 +675,19 @@ static void insert_ready_thread (struct thread* t) {
     rr_insert_ready_thread (t);
 }
 
+void thread_tick_tail () {
+  if (!thread_mlfqs)
+    return;
+
+  const int64_t ticks = timer_ticks ();
+  if (ticks % TIME_SLICE == 0) {
+    mlfq_thread_quantum_tick ();
+  }
+
+  if (ticks % TIMER_FREQ == 0) {
+    mlfq_thread_second_tick ();
+  }
+}
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */

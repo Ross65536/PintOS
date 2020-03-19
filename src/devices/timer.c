@@ -40,7 +40,7 @@ timer_init (void)
   sleep_init();
   
   pit_configure_channel (0, 2, TIMER_FREQ);
-  intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  intr_register_ext (TIMER_IRQ, timer_interrupt, "8254 Timer");
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
