@@ -28,4 +28,6 @@ void mlfq_thread_second_tick (void);
 
 void mlfq_thread_tick (struct thread_mlfq_block* t);
 
+int mlfq_get_recent_cpu (struct thread_mlfq_block* t);
+
 #endif

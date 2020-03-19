@@ -408,8 +408,10 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  if (! thread_mlfqs)
+    return 0;
+  
+  return mlfq_get_recent_cpu (&thread_current ()->thread_mlfq_block);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
