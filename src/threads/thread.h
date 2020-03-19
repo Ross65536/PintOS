@@ -7,6 +7,7 @@
 #include <kernel/array.h>
 #include "synch.h"
 #include "scheduler.h"
+#include "mlfq-scheduler.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -91,8 +92,8 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
     struct rr_thread_block rr_thread_block;
+    struct thread_mlfq_block thread_mlfq_block; 
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -147,6 +148,9 @@ int thread_get_load_avg (void);
 struct thread * pop_highest_priority_thread (struct list* thread_list);
 bool should_curr_thread_yield_priority (struct thread * other);
 struct semaphore_elem * pop_highest_priority_cond_var_waiter (struct list* waiters);
+
+struct thread * running_thread (void);
+
 
 #define MAX(a,b) \
 ({ __typeof__ (a) _a = (a); \

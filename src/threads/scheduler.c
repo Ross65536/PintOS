@@ -34,7 +34,7 @@ static int rr_thread_priority_recursive (struct thread * t, unsigned int max_rec
   }
 
   lock_acquire (&t->rr_thread_block.priority_donors_lock);
-  int max_pri = t->priority;
+  int max_pri = t->rr_thread_block.priority;
   for (size_t i = 0; i < t->rr_thread_block.priority_donors.curr_size; i++) {
     const int parent_pri = rr_thread_priority_recursive (t->rr_thread_block.priority_donors.data[i], max_recursions - 1);
     max_pri = MAX(max_pri, parent_pri); 
@@ -81,7 +81,7 @@ rr_thread_set_priority (int new_priority)
   const int curr_pri = thread_get_priority();
   
   // TODO maybe add lock here? Is it necessary?
-  thread_current ()->priority = new_priority;
+  thread_current ()->rr_thread_block.priority = new_priority;
   
   const int new_pri = thread_get_priority();
   if (new_pri < curr_pri)
@@ -90,7 +90,7 @@ rr_thread_set_priority (int new_priority)
 
 void 
 rr_thread_init (struct thread *t, int priority) {
-  t->priority = priority;
+  t->rr_thread_block.priority = priority;
   ARRAY_INIT(t->rr_thread_block.priority_donors, DONORS_ARR_SIZE);
   lock_init (&t->rr_thread_block.priority_donors_lock);
 }
