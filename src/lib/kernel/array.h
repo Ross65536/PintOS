@@ -32,7 +32,6 @@
   })
 
 #define ARRAY_REMOVE(arr, index) ({ \
-  ASSERT (index >= 0); \
   const bool can_remove = index < arr.curr_size && ! ARRAY_IS_EMPTY (arr); \
   if (can_remove) { \
       for (size_t __idx = index; __idx < arr.curr_size - 1; __idx++) { \

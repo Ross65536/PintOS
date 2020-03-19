@@ -209,13 +209,19 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /* Add to run queue. */
-  thread_unblock (t);
+
+  bool is_idle = function == idle;
+  if (is_idle) {
+    t->status = THREAD_READY;
+    idle_thread = t;
+  } else {
+    /* Add to run queue. */
+    thread_unblock (t);
+  }
 
   if (should_curr_thread_yield_priority (t)) {
     thread_yield();
   }
-
 
   return tid;
 }
@@ -395,7 +401,7 @@ thread_get_load_avg (void)
   if (!thread_mlfqs) 
     return 0;
 
-  return mlfq_thread_get_load_avg (running_thread ());
+  return mlfq_thread_get_load_avg ();
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -419,7 +425,7 @@ static void
 idle (void *idle_started_ UNUSED) 
 {
   struct semaphore *idle_started = idle_started_;
-  idle_thread = thread_current ();
+  // idle_thread = thread_current ();
   sema_up (idle_started);
 
   for (;;) 

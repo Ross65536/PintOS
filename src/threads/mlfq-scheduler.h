@@ -21,7 +21,7 @@ void mlfq_thread_set_nice (int nice);
 
 int mlfq_thread_get_nice (struct thread* t);
 
-int mlfq_thread_get_load_avg (struct thread* t);
+int mlfq_thread_get_load_avg (void);
 
 void mlfq_thread_quantum_tick (void);
 void mlfq_thread_second_tick (void);

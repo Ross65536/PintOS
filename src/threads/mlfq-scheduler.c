@@ -7,7 +7,7 @@
 #include <kernel/fixed-point.h>
 #include <debug.h>
 
-#define NUMBER_QUEUES PRI_MAX
+#define NUMBER_QUEUES (PRI_MAX + 1)
 
 #define CUTOFF_RANGE(val, min, max) \
 ({ \
@@ -22,8 +22,6 @@ static struct lock mlfqs_lock;
 static int ready_threads;
 
 static struct fixed_point load_avg;
-
-
 
 void mlfq_scheduler_init (void) {
   for (size_t i = 0; i < NUMBER_QUEUES; i++) {
@@ -52,6 +50,24 @@ static void mlfq_update_thread_pri (struct thread_mlfq_block* t) {
   t->priority = CUTOFF_RANGE (pri_int, PRI_MIN, PRI_MAX);
 }
 
+static void mlfq_update_ready_thread_pri (struct thread* t) {
+  ASSERT (t->status == THREAD_READY);
+
+  // thread READY
+  lock_acquire (&mlfqs_lock);
+
+  const int prev_pri = mlfq_thread_priority(t);
+  mlfq_update_thread_pri (&t->thread_mlfq_block);
+  const int new_pri = mlfq_thread_priority(t);
+  
+  if (new_pri != prev_pri) {
+    list_remove (&t->elem); // remove thread from previous queue
+    list_push_back (&mlfqs[new_pri], &t->elem); // add thread to new queue
+  }
+  
+  lock_release (&mlfqs_lock);
+}
+
 void mlfq_thread_init (struct thread *t) {
 
   struct thread* parent_t = running_thread ();
@@ -71,7 +87,7 @@ struct thread * mlfq_next_thread_to_run (void)
   lock_acquire (&mlfqs_lock);
 
   struct thread * next_thread = NULL;
-  for (int i = NUMBER_QUEUES; i >= 0; i--) {
+  for (int i = NUMBER_QUEUES - 1; i >= 0; i--) {
     struct list* queue = &mlfqs[i];
     if (! list_empty (queue)) {
       struct list_elem * next_elem = list_pop_front (queue);
@@ -108,8 +124,7 @@ void mlfq_thread_set_nice (int nice) {
   
   t->thread_mlfq_block.nice = nice;
 
-  // TODO: calc new thread pri
-
+  mlfq_update_thread_pri (&t->thread_mlfq_block);
   const int final_pri = mlfq_thread_priority (t);
   if (final_pri < inital_pri) {
     thread_yield ();
@@ -120,8 +135,8 @@ int mlfq_thread_get_nice (struct thread* t) {
   return t->thread_mlfq_block.nice;
 }
 
-int mlfq_thread_get_load_avg (struct thread* t) {
-  struct fixed_point real = fixed_point_mult_int (t->thread_mlfq_block.recent_cpu, 100);
+int mlfq_thread_get_load_avg () {
+  struct fixed_point real = fixed_point_mult_int (load_avg, 100);
   return fixed_point_to_int (real);
 }
 
@@ -131,19 +146,7 @@ static void mlfq_thread_quantum_priority_update_func (struct thread *t, void *au
     return;
   }
 
-  // thread READY
-  lock_acquire (&mlfqs_lock);
-
-  const int prev_pri = mlfq_thread_priority(t);
-  mlfq_update_thread_pri (&t->thread_mlfq_block);
-  const int new_pri = mlfq_thread_priority(t);
-  
-  if (new_pri != prev_pri) {
-    list_remove (&t->elem); // remove thread from previous queue
-    list_push_back (&mlfqs[new_pri], &t->elem); // add thread to new queue
-  }
-  
-  lock_release (&mlfqs_lock);
+  mlfq_update_ready_thread_pri (t);
 }
 
 void mlfq_thread_quantum_tick () {
