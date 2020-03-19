@@ -157,7 +157,7 @@ struct thread * running_thread (void);
 void thread_quantum_tick (void);
 void thread_tick_tail (void);
 
-
+bool is_idle_thread (struct thread* t);
 
 
 #define MAX(a,b) \

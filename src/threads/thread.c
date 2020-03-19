@@ -401,7 +401,7 @@ thread_get_load_avg (void)
   if (!thread_mlfqs) 
     return 0;
 
-  return mlfq_thread_get_load_avg ();
+  return mlfq_get_load_avg ();
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -693,6 +693,10 @@ void thread_tick_tail () {
   if (ticks % TIMER_FREQ == 0) {
     mlfq_thread_second_tick ();
   }
+}
+
+bool is_idle_thread (struct thread* t) {
+  return t == idle_thread;
 }
 
 /* Offset of `stack' member within `struct thread'.
