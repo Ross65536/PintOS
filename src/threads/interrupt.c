@@ -386,7 +386,7 @@ intr_handler (struct intr_frame *frame)
 
       // timer interrupt tail, can be locked, etc
       if (frame->vec_no == TIMER_IRQ) {
-        thread_tick_tail ();
+        timer_interrupt_tail ();
       }
 
       if (yield_on_return) 
