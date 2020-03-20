@@ -8,7 +8,7 @@ void
 sleep_curr_thread (int64_t target_tick);
 
 void 
-thread_sleep_tick (int64_t curr_ticks);
+thread_sleep_tick (void);
 
 
 #endif

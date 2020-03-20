@@ -186,7 +186,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 }
 
 void timer_interrupt_tail () {
-  thread_sleep_tick (ticks);
+  thread_sleep_tick ();
   thread_tick_tail ();
 }
 
