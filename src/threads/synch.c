@@ -356,3 +356,7 @@ cond_broadcast (struct condition *cond, struct lock *lock)
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
 }
+
+bool cond_no_waiters (struct condition * cond) {
+  return list_empty(&cond->waiters);
+}
