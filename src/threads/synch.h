@@ -47,6 +47,7 @@ struct condition
 
 void cond_init (struct condition *);
 void cond_wait (struct condition *, struct lock *);
+void cond_signal_with_yielding (struct condition *, struct lock *, bool can_yield);
 void cond_signal (struct condition *, struct lock *);
 void cond_broadcast (struct condition *, struct lock *);
 

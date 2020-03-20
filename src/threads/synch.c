@@ -102,12 +102,7 @@ sema_try_down (struct semaphore *sema)
   return success;
 }
 
-/* Up or "V" operation on a semaphore.  Increments SEMA's value
-   and wakes up one thread of those waiting for SEMA, if any.
-
-   This function may be called from an interrupt handler. */
-void
-sema_up (struct semaphore *sema) 
+static void sema_up_with_yield (struct semaphore *sema, bool can_yield) 
 {
   enum intr_level old_level;
 
@@ -122,9 +117,19 @@ sema_up (struct semaphore *sema)
   sema->value++;
   intr_set_level (old_level);
 
-  if (waiter != NULL && should_curr_thread_yield_priority (waiter)) {
+  if (can_yield && waiter != NULL && should_curr_thread_yield_priority (waiter)) {
     thread_yield ();
   }
+}
+
+/* Up or "V" operation on a semaphore.  Increments SEMA's value
+   and wakes up one thread of those waiting for SEMA, if any.
+
+   This function may be called from an interrupt handler. */
+void
+sema_up (struct semaphore *sema) 
+{
+  sema_up_with_yield (sema, true);
 }
 
 static void sema_test_helper (void *sema_);
@@ -318,7 +323,17 @@ cond_wait (struct condition *cond, struct lock *lock)
   lock_acquire (lock);
 }
 
+void cond_signal_with_yielding (struct condition *cond, struct lock *lock UNUSED, bool can_yield) {
+  ASSERT (cond != NULL);
+  ASSERT (lock != NULL);
+  ASSERT (!intr_context ());
+  ASSERT (lock_held_by_current_thread (lock)); 
 
+  if (!list_empty (&cond->waiters)) {
+    struct semaphore_elem * elem = pop_highest_priority_cond_var_waiter (&cond->waiters);
+    sema_up_with_yield (&elem->semaphore, can_yield); // preemption already handled by sema_up
+  }
+}
 
 /* If any threads are waiting on COND (protected by LOCK), then
    this function signals one of them to wake up from its wait.
@@ -330,15 +345,7 @@ cond_wait (struct condition *cond, struct lock *lock)
 void
 cond_signal (struct condition *cond, struct lock *lock UNUSED) 
 {
-  ASSERT (cond != NULL);
-  ASSERT (lock != NULL);
-  ASSERT (!intr_context ());
-  ASSERT (lock_held_by_current_thread (lock)); 
-
-  if (!list_empty (&cond->waiters)) {
-    struct semaphore_elem * elem = pop_highest_priority_cond_var_waiter (&cond->waiters);
-    sema_up (&elem->semaphore); // preemption already handled by sema_up
-  }
+  cond_signal_with_yielding (cond, lock, true);
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by

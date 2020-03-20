@@ -69,7 +69,7 @@ thread_sleep_tick ()
       ASSERT (! cond_no_waiters (&node->waiter));
       
       e = list_remove (e);
-      cond_signal (&node->waiter, &sleeping_threads.monitor_lock);
+      cond_signal_with_yielding (&node->waiter, &sleeping_threads.monitor_lock, false);
     } else {
       break;
     }
