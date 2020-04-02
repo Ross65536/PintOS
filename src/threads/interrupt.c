@@ -384,11 +384,6 @@ intr_handler (struct intr_frame *frame)
       in_external_intr = false;
       pic_end_of_interrupt (frame->vec_no); 
 
-      // timer interrupt tail, can be locked, etc
-      if (frame->vec_no == TIMER_IRQ) {
-        timer_interrupt_tail ();
-      }
-
       if (yield_on_return) 
         thread_yield (); 
     }

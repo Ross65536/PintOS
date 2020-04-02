@@ -72,7 +72,8 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-
+static void thread_tick_tail (void);
+  
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -105,7 +106,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-}
+} 
 
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
@@ -148,6 +149,8 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+
+  thread_tick_tail ();
 }
 
 /* Prints thread statistics. */
@@ -683,7 +686,7 @@ static void insert_ready_thread (struct thread* t) {
     rr_insert_ready_thread (t);
 }
 
-void thread_tick_tail () {
+static void thread_tick_tail () {
   if (!thread_mlfqs)
     return;
 

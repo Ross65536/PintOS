@@ -183,11 +183,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
 
   thread_tick ();
-}
-
-void timer_interrupt_tail () {
   thread_sleep_tick ();
-  thread_tick_tail ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

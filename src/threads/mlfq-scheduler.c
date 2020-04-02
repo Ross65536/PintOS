@@ -54,7 +54,8 @@ static void mlfq_update_ready_thread_pri (struct thread* t) {
   ASSERT (t->status == THREAD_READY);
 
   // thread READY
-  lock_acquire (&mlfqs_lock);
+  if (! lock_try_acquire (&mlfqs_lock))
+    return;
 
   const int prev_pri = mlfq_thread_priority(t);
   mlfq_update_thread_pri (&t->thread_mlfq_block);

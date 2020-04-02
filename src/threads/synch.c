@@ -242,6 +242,20 @@ lock_try_acquire (struct lock *lock)
   return success;
 }
 
+void
+lock_release_with_locking (struct lock *lock, bool can_lock) 
+{
+  ASSERT (lock != NULL);
+  ASSERT (lock_held_by_current_thread (lock));
+
+  lock->holder = NULL;
+
+  if (can_lock && !thread_mlfqs && !list_empty(&lock->semaphore.waiters))
+    rr_try_undonate_priority (&lock->semaphore.waiters, thread_current());
+
+  sema_up_with_yield (&lock->semaphore, can_lock);
+}
+
 /* Releases LOCK, which must be owned by the current thread.
 
    An interrupt handler cannot acquire a lock, so it does not
@@ -250,16 +264,10 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
-  ASSERT (lock != NULL);
-  ASSERT (lock_held_by_current_thread (lock));
-
-  lock->holder = NULL;
-
-  if (!thread_mlfqs && !list_empty(&lock->semaphore.waiters))
-    rr_try_undonate_priority (&lock->semaphore.waiters, thread_current());
-
-  sema_up (&lock->semaphore);
+  lock_release_with_locking (lock, true);
 }
+
+
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
@@ -326,7 +334,7 @@ cond_wait (struct condition *cond, struct lock *lock)
 void cond_signal_with_yielding (struct condition *cond, struct lock *lock UNUSED, bool can_yield) {
   ASSERT (cond != NULL);
   ASSERT (lock != NULL);
-  ASSERT (!intr_context ());
+  // ASSERT (intr_context ());
   ASSERT (lock_held_by_current_thread (lock)); 
 
   if (!list_empty (&cond->waiters)) {
