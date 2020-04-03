@@ -28,6 +28,7 @@
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
+#include "userprog/process_exit.h"
 #else
 #include "tests/threads/tests.h"
 #endif
@@ -128,6 +129,10 @@ pintos_init (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
+
+#ifdef USERPROG
+  process_exit_init ();
+#endif 
 
   printf ("Boot complete.\n");
   
@@ -292,6 +297,7 @@ run_task (char **argv)
   printf ("Executing '%s':\n", task);
 #ifdef USERPROG
   process_wait (process_execute (task));
+  printf(">>>here<<<<");
 #else
   run_test (task);
 #endif

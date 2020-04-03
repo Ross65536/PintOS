@@ -17,9 +17,17 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+#include "process_exit.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+
+#define PROCESS_ARGS_SIZE 256
+struct start_process_arg {
+  char filename[PROCESS_ARGS_SIZE];
+  tid_t parent_tid;
+};
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -28,29 +36,33 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  struct start_process_arg *start_process_arg = palloc_get_page (0);
+  if (start_process_arg == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  
+  strlcpy (start_process_arg->filename, file_name, PROCESS_ARGS_SIZE);
+  start_process_arg->parent_tid = thread_current()->tid;
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, start_process_arg);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (start_process_arg); 
+
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *arg)
 {
-  char *file_name = file_name_;
+  struct start_process_arg *start_process_arg = arg;
+  char *file_name = start_process_arg->filename;
   struct intr_frame if_;
   bool success;
 
@@ -62,10 +74,13 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  palloc_free_page (arg);
+  if (!success) {
     thread_exit ();
+  }
 
+  add_process_exit_elem (start_process_arg->parent_tid, thread_current()->tid);
+  
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -86,9 +101,13 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+  if (child_tid == TID_ERROR) {
+    return -1;
+  }
+
+  return collect_process_exit_code(child_tid);
 }
 
 /* Free the current process's resources. */
@@ -437,7 +456,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = PHYS_BASE - 12;
       else
         palloc_free_page (kpage);
     }

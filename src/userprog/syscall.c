@@ -3,6 +3,7 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "process_exit.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -16,5 +17,6 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   printf ("system call!\n");
+  process_add_exit_code (thread_current ()->tid, -1); // TODO fixup
   thread_exit ();
 }
