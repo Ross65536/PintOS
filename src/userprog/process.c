@@ -24,10 +24,38 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 #define PROCESS_ARGS_SIZE 256
+#define MAX_ARGS 30
 struct start_process_arg {
   char filename[PROCESS_ARGS_SIZE];
+  size_t num_args;
+  char* args[MAX_ARGS];
   tid_t parent_tid;
 };
+
+static void print_args(struct start_process_arg* process_args) {
+  printf(">>>>>>>>>>>");
+
+  for (size_t i = 0; i < process_args->num_args; i++) {
+    printf("|%s|", process_args->args[i]);
+  }
+
+  printf(" <<<<<<<<<<<");
+}
+
+static void init_start_process_arg (struct start_process_arg* process_args, const char* file_name) {
+  process_args->parent_tid = thread_current()->tid;
+  strlcpy (process_args->filename, file_name, PROCESS_ARGS_SIZE);
+  process_args->num_args = 0;
+  
+  for (char *save_ptr, *token = strtok_r (process_args->filename, " ", &save_ptr); 
+      process_args->num_args < MAX_ARGS && token != NULL; 
+      token = strtok_r (NULL, " ", &save_ptr)) {
+        process_args->args[process_args->num_args] = token;
+        process_args->num_args++;
+  }
+
+  ASSERT (process_args->num_args > 0);
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -36,7 +64,6 @@ struct start_process_arg {
 tid_t
 process_execute (const char *file_name) 
 {
-  
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -45,15 +72,16 @@ process_execute (const char *file_name)
   if (start_process_arg == NULL)
     return TID_ERROR;
   
-  strlcpy (start_process_arg->filename, file_name, PROCESS_ARGS_SIZE);
-  start_process_arg->parent_tid = thread_current()->tid;
+  init_start_process_arg (start_process_arg, file_name);
+  char name[PROCESS_MAX_NAME];
+  strlcpy (name, start_process_arg->args[0], PROCESS_MAX_NAME);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, start_process_arg);
   if (tid == TID_ERROR)
     palloc_free_page (start_process_arg); 
   else 
-    add_process_exit_elem (thread_current()->tid, tid);
+    add_process_exit_elem (thread_current()->tid, tid, name);
 
   return tid;
 }
@@ -64,7 +92,7 @@ static void
 start_process (void *arg)
 {
   struct start_process_arg *start_process_arg = arg;
-  char *file_name = start_process_arg->filename;
+  char *file_name = start_process_arg->args[0];
   struct intr_frame if_;
   bool success;
 
@@ -75,16 +103,16 @@ start_process (void *arg)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  tid_t tid = thread_current()->tid;
+  add_process_exit_elem (start_process_arg->parent_tid, tid, start_process_arg->args[0]);
+
   /* If load failed, quit. */
   palloc_free_page (arg);
-
-  tid_t tid = thread_current()->tid;
-  add_process_exit_elem (start_process_arg->parent_tid, tid);
   if (!success) {
     process_add_exit_code(tid, -1);
+    print_exit_code (tid);
     thread_exit ();
   }
-
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -109,7 +137,7 @@ int
 process_wait (tid_t child_tid) 
 {
   if (child_tid == TID_ERROR) {
-    return -1;
+    return BAD_EXIT_CODE;
   }
 
   return collect_process_exit_code(child_tid);

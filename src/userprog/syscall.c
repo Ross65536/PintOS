@@ -17,6 +17,8 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   printf ("system call!\n");
-  process_add_exit_code (thread_current ()->tid, 0); // TODO fixup
+  tid_t tid = thread_current ()->tid;
+  process_add_exit_code (tid, 0); // TODO fixup
+  print_exit_code (tid);
   thread_exit ();
 }

@@ -2,8 +2,12 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/interrupt.h"
+#include <debug.h>
+#include <string.h>
+#include <stdio.h>
 
 struct process_exit_node {
+  char name[PROCESS_MAX_NAME];
   tid_t parent_tid;
   tid_t tid;
   struct condition cond_exited;
@@ -38,26 +42,12 @@ static struct process_exit_node* find_process (tid_t tid) {
   return list_entry (found, struct process_exit_node, elem);
 }
 
-// must be called with monitor lock held
-static struct process_exit_node* insert_process(tid_t parent_tid, tid_t tid) {
-  struct process_exit_node* node = malloc (sizeof (struct process_exit_node));
-  node->parent_tid = parent_tid;
-  node->tid = tid;
-  node->exited = false;
-  node->exit_code = -1;
-  cond_init(&node->cond_exited);
-
-  list_push_back (& process_exit_codes.processes, &node->elem);
-
-  return node;
-}
-
 static void remove_process (struct process_exit_node* node) {
   list_remove (&node->elem);
   free (node);
 }
 
-void add_process_exit_elem (tid_t parent_tid, tid_t tid) {
+void add_process_exit_elem (tid_t parent_tid, tid_t tid, const char* name) {
   ASSERT (! intr_context());
 
   lock_acquire (& process_exit_codes.monitor_lock);
@@ -67,7 +57,15 @@ void add_process_exit_elem (tid_t parent_tid, tid_t tid) {
     return;
   }
 
-  insert_process (parent_tid, tid);
+  struct process_exit_node* node = malloc (sizeof (struct process_exit_node));
+  strlcpy (node->name, name, PROCESS_MAX_NAME);
+  node->parent_tid = parent_tid;
+  node->tid = tid;
+  node->exited = false;
+  node->exit_code = BAD_EXIT_CODE;
+  cond_init(&node->cond_exited);
+
+  list_push_back (& process_exit_codes.processes, &node->elem);
 
   lock_release (& process_exit_codes.monitor_lock);
 }
@@ -95,7 +93,7 @@ int collect_process_exit_code (tid_t tid) {
   struct process_exit_node* node = find_process (tid);
   tid_t parent_tid = thread_current ()->tid;
   if (node == NULL || parent_tid != node->parent_tid) {
-    return -1;
+    return BAD_EXIT_CODE;
   }
 
   if (!node->exited) {
@@ -106,5 +104,18 @@ int collect_process_exit_code (tid_t tid) {
   remove_process (node);
   
   lock_release (&process_exit_codes.monitor_lock);
+
   return exit_code;
+}
+
+void print_exit_code (tid_t tid) {
+  lock_acquire (&process_exit_codes.monitor_lock);
+
+  struct process_exit_node* node = find_process (tid);
+  ASSERT (node != NULL);
+  ASSERT (node->exited);
+  
+  printf ("%s: exit(%d)\n", node->name, node->exit_code);
+  
+  lock_release (&process_exit_codes.monitor_lock);
 }
