@@ -52,6 +52,8 @@ process_execute (const char *file_name)
   tid = thread_create (file_name, PRI_DEFAULT, start_process, start_process_arg);
   if (tid == TID_ERROR)
     palloc_free_page (start_process_arg); 
+  else 
+    add_process_exit_elem (thread_current()->tid, tid);
 
   return tid;
 }
@@ -75,12 +77,15 @@ start_process (void *arg)
 
   /* If load failed, quit. */
   palloc_free_page (arg);
+
+  tid_t tid = thread_current()->tid;
+  add_process_exit_elem (start_process_arg->parent_tid, tid);
   if (!success) {
+    process_add_exit_code(tid, -1);
     thread_exit ();
   }
 
-  add_process_exit_elem (start_process_arg->parent_tid, thread_current()->tid);
-  
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its

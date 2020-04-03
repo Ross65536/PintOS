@@ -62,7 +62,10 @@ void add_process_exit_elem (tid_t parent_tid, tid_t tid) {
 
   lock_acquire (& process_exit_codes.monitor_lock);
 
-  ASSERT((find_process (tid) == NULL));
+  if (find_process (tid) != NULL) {
+    lock_release (& process_exit_codes.monitor_lock);
+    return;
+  }
 
   insert_process (parent_tid, tid);
 
@@ -103,6 +106,5 @@ int collect_process_exit_code (tid_t tid) {
   remove_process (node);
   
   lock_release (&process_exit_codes.monitor_lock);
-
   return exit_code;
 }
