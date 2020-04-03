@@ -21,7 +21,7 @@
 #include "process_exit.h"
 
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static bool load (char* args[], size_t num_args, void (**eip) (void), void **esp);
 
 #define PROCESS_ARGS_SIZE 256
 #define MAX_ARGS 30
@@ -31,16 +31,6 @@ struct start_process_arg {
   char* args[MAX_ARGS];
   tid_t parent_tid;
 };
-
-static void print_args(struct start_process_arg* process_args) {
-  printf(">>>>>>>>>>>");
-
-  for (size_t i = 0; i < process_args->num_args; i++) {
-    printf("|%s|", process_args->args[i]);
-  }
-
-  printf(" <<<<<<<<<<<");
-}
 
 static void init_start_process_arg (struct start_process_arg* process_args, const char* file_name) {
   process_args->parent_tid = thread_current()->tid;
@@ -55,6 +45,12 @@ static void init_start_process_arg (struct start_process_arg* process_args, cons
   }
 
   ASSERT (process_args->num_args > 0);
+}
+
+static int load_stack_args (uint8_t * page, char* args[], size_t num_args) {
+  uint8_t* base = page - PGSIZE;
+
+  return 12;
 }
 
 /* Starts a new thread running a user program loaded from
@@ -92,7 +88,6 @@ static void
 start_process (void *arg)
 {
   struct start_process_arg *start_process_arg = arg;
-  char *file_name = start_process_arg->args[0];
   struct intr_frame if_;
   bool success;
 
@@ -101,7 +96,7 @@ start_process (void *arg)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (start_process_arg->args, start_process_arg->num_args, &if_.eip, &if_.esp);
 
   tid_t tid = thread_current()->tid;
   add_process_exit_elem (start_process_arg->parent_tid, tid, start_process_arg->args[0]);
@@ -247,7 +242,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char* args[], size_t num_args);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -257,9 +252,10 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
-bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+bool load (char* args[], size_t num_args, void (**eip) (void), void **esp) 
 {
+  const char *file_name = args[0];
+
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -354,7 +350,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, args, num_args))
     goto done;
 
   /* Start address. */
@@ -479,7 +475,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char* args[], size_t num_args) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -487,9 +483,10 @@ setup_stack (void **esp)
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
+      const int offset = load_stack_args (kpage, args, num_args);
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12;
+        *esp = PHYS_BASE - offset;
       else
         palloc_free_page (kpage);
     }

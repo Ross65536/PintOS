@@ -4,6 +4,7 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "process_exit.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -86,6 +87,7 @@ kill (struct intr_frame *f)
     case SEL_UCSEG:
       /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
+      process_add_exit_code (thread_current()->tid, BAD_EXIT_CODE);
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
@@ -139,6 +141,9 @@ page_fault (struct intr_frame *f)
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
+
+   if (f->cs == SEL_UCSEG)
+      process_add_exit_code (thread_current()->tid, BAD_EXIT_CODE);
 
   /* Count page faults. */
   page_fault_cnt++;
