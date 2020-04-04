@@ -261,3 +261,8 @@ invalidate_pagedir (uint32_t *pd)
       pagedir_activate (pd);
     } 
 }
+
+bool is_ptr_page_mapped(uint32_t* pagedir, void* ptr) {
+  uint32_t* pte = lookup_page (pagedir, ptr, false);
+  return pte != NULL && (*pte & PTE_P) != 0;
+}

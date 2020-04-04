@@ -119,3 +119,10 @@ void print_exit_code (tid_t tid) {
   
   lock_release (&process_exit_codes.monitor_lock);
 }
+
+void abnormal_process_exit() {
+  tid_t tid = thread_current ()->tid;
+  process_add_exit_code (tid, BAD_EXIT_CODE);
+  print_exit_code (tid);
+  thread_exit ();
+}

@@ -1,10 +1,11 @@
-#include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "userprog/process.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -19,6 +20,7 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "process_exit.h"
+#include "vm.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (char* args[], size_t num_args, void (**eip) (void), void **esp);
@@ -38,8 +40,9 @@ static void init_start_process_arg (struct start_process_arg* process_args, cons
   process_args->num_args = 0;
   
   for (char *save_ptr, *token = strtok_r (process_args->filename, " ", &save_ptr); 
-      process_args->num_args < MAX_ARGS && token != NULL; 
-      token = strtok_r (NULL, " ", &save_ptr)) {
+          process_args->num_args < MAX_ARGS && token != NULL; 
+          token = strtok_r (NULL, " ", &save_ptr)) {
+
         process_args->args[process_args->num_args] = token;
         process_args->num_args++;
   }
@@ -47,10 +50,44 @@ static void init_start_process_arg (struct start_process_arg* process_args, cons
   ASSERT (process_args->num_args > 0);
 }
 
-static int load_stack_args (uint8_t * page, char* args[], size_t num_args) {
-  uint8_t* base = page - PGSIZE;
+static int load_stack_args (uint8_t * kpage_bottom, uint8_t* upage_bottom, char* args[], size_t num_args) {
 
-  return 12;
+  uint8_t * kpage_top = kpage_bottom + PGSIZE;
+  uint8_t * upage_top = upage_bottom + PGSIZE;
+
+  const size_t uargs_size = num_args + 1;
+  ASSERT (uargs_size <= MAX_ARGS + 1);
+  uint8_t* u_args[uargs_size];
+  u_args[uargs_size - 1] = NULL; // c's argv[] ends in NULL
+
+  size_t offset = 0;
+
+  for (size_t i = 0; i < num_args; i++) {
+    char* arg = args[i];
+
+    const size_t arg_offset = strlen (arg) + 1; // also count \0
+    offset += arg_offset;
+
+    strlcpy ((char*) (kpage_top - offset), arg, arg_offset);
+    u_args[i] = upage_top - offset;
+  }
+
+  // align pointers for arguments
+  offset += pointer_alignment_offset(kpage_top - offset, CALL_ARG_ALIGNMENT);
+
+  const size_t argv_offset = uargs_size * sizeof (uint8_t *);
+  offset += argv_offset;
+  memcpy (kpage_top - offset, u_args, argv_offset);
+
+  const size_t argc_offset = CALL_ARG_ALIGNMENT;
+  offset += argc_offset;
+  int* argv_ptr = (int*) (kpage_top - offset);
+  *argv_ptr = num_args;
+
+  const size_t null_ret_offset = CALL_ARG_ALIGNMENT;
+  offset += null_ret_offset;
+
+  return offset;
 }
 
 /* Starts a new thread running a user program loaded from
@@ -483,8 +520,9 @@ setup_stack (void **esp, char* args[], size_t num_args)
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
-      const int offset = load_stack_args (kpage, args, num_args);
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      uint8_t * upage_bottom = ((uint8_t *) PHYS_BASE) - PGSIZE;
+      const int offset = load_stack_args (kpage, upage_bottom, args, num_args);
+      success = install_page (upage_bottom, kpage, true);
       if (success)
         *esp = PHYS_BASE - offset;
       else
@@ -493,7 +531,7 @@ setup_stack (void **esp, char* args[], size_t num_args)
   return success;
 }
 
-/* Adds a mapping from user virtual address UPAGE to kernel
+/* Adds a mapping from user virtual address UPAGE to kernel 
    virtual address KPAGE to the page table.
    If WRITABLE is true, the user process may modify the page;
    otherwise, it is read-only.

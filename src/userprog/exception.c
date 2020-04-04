@@ -142,8 +142,8 @@ page_fault (struct intr_frame *f)
      be assured of reading CR2 before it changed). */
   intr_enable ();
 
-   if (f->cs == SEL_UCSEG)
-      process_add_exit_code (thread_current()->tid, BAD_EXIT_CODE);
+  if (f->cs == SEL_UCSEG)
+    process_add_exit_code (thread_current()->tid, BAD_EXIT_CODE);
 
   /* Count page faults. */
   page_fault_cnt++;
