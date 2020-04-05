@@ -74,7 +74,7 @@ static size_t write(int fd, char* buf, size_t size) {
 static pid_t exec (char* cmd_line) {
   char c_cmd[MAX_PROCESS_ARGS_SIZE];
   if (!get_userland_string(cmd_line, c_cmd, MAX_PROCESS_ARGS_SIZE)) {
-    return SYSCALL_ERROR;
+    exit_curr_process (BAD_EXIT_CODE, true);
   }
 
   tid_t child = process_execute (c_cmd);
