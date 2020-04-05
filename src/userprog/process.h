@@ -3,6 +3,7 @@
 
 #include "threads/thread.h"
 #include "threads/synch.h"
+#include "filesys/file.h"
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
@@ -26,5 +27,7 @@ void process_add_exit_code (tid_t tid, int exit_code);
 int collect_process_exit_code (tid_t tid);
 void exit_curr_process(int exit_code, bool should_print_exit_code);
 void print_exit_code (tid_t tid);
+int add_process_open_file (tid_t tid, struct file* file);
+
 
 #endif /* userprog/process.h */

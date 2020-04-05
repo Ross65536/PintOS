@@ -129,6 +129,29 @@ static bool remove (char* file_path) {
   return removed;
 }
 
+static int open (char* file_path) {
+  char k_path[MAX_FILENAME_SIZE];
+  size_t num_read;
+  if (!get_userland_string(file_path, k_path, MAX_FILENAME_SIZE, &num_read)) {
+    exit_curr_process (BAD_EXIT_CODE, true);
+  }
+
+  if (num_read == MAX_FILENAME_SIZE) { 
+    return SYSCALL_ERROR;
+  }
+
+  lock_acquire (&filesys_monitor);
+  struct file * file = filesys_open (k_path);
+  lock_release (&filesys_monitor);
+
+  if (file == NULL) 
+    return SYSCALL_ERROR;
+
+  const int fd = add_process_open_file (thread_current ()->tid, file);
+
+  return fd;
+}
+
 static void
 syscall_handler (struct intr_frame *f) 
 {
@@ -176,7 +199,11 @@ syscall_handler (struct intr_frame *f)
       set_ret_val (f, remove (u_name));
       return; 
     }
-    case SYS_OPEN:
+    case SYS_OPEN: {
+      char* u_name = (char*) get_stack_ptr (&esp);
+      set_ret_val (f, open (u_name));
+      return; 
+    }
     case SYS_FILESIZE:
     case SYS_READ:
     case SYS_SEEK:
