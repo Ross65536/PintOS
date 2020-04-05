@@ -21,8 +21,34 @@
 #include "threads/malloc.h"
 #include "vm.h"
 
+#define PROCESS_ARGS_SIZE 256
+#define MAX_ARGS 30
+
 static thread_func start_process NO_RETURN;
 static bool load (char* args[], size_t num_args, void (**eip) (void), void **esp);
+
+struct start_process_arg {
+  char command[PROCESS_ARGS_SIZE];
+  size_t num_args;
+  char* args[MAX_ARGS];
+  tid_t parent_tid;
+};
+
+static void parse_executable_command (struct start_process_arg* process_args, const char* command) {
+  process_args->parent_tid = thread_current()->tid;
+  strlcpy (process_args->command, command, PROCESS_ARGS_SIZE);
+  process_args->num_args = 0;
+  
+  for (char *save_ptr, *token = strtok_r (process_args->command, " ", &save_ptr); 
+          process_args->num_args < MAX_ARGS && token != NULL; 
+          token = strtok_r (NULL, " ", &save_ptr)) {
+
+        process_args->args[process_args->num_args] = token;
+        process_args->num_args++;
+  }
+
+  ASSERT (process_args->num_args > 0);
+}
 
 
 static int load_stack_args (uint8_t * kpage_bottom, uint8_t* upage_bottom, char* args[], size_t num_args) {
@@ -76,7 +102,7 @@ static int load_stack_args (uint8_t * kpage_bottom, uint8_t* upage_bottom, char*
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *exec_command) 
 {
   tid_t tid;
 
@@ -86,12 +112,12 @@ process_execute (const char *file_name)
   if (start_process_arg == NULL)
     return TID_ERROR;
   
-  parse_executable_command (start_process_arg, file_name);
+  parse_executable_command (start_process_arg, exec_command);
   char name[PROCESS_MAX_NAME];
   strlcpy (name, start_process_arg->args[0], PROCESS_MAX_NAME);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, start_process_arg);
+  tid = thread_create (exec_command, PRI_DEFAULT, start_process, start_process_arg);
   if (tid == TID_ERROR)
     palloc_free_page (start_process_arg); 
   else 

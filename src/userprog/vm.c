@@ -37,21 +37,13 @@ static bool is_user_ptr_access_valid (void* ptr, size_t size) {
       is_ptr_page_mapped(pagedir, ptr) && is_ptr_page_mapped (pagedir, end_ptr);
 }
 
-/**
- * Return malloc'd buffer with read data from user land on success. Null on failure.
- */
-void* get_userland_buffer (void* user_buf_ptr, size_t size) {
-  if (! is_user_ptr_access_valid(user_buf_ptr, size)) {
-    return NULL;
+bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size) {
+  if (! is_user_ptr_access_valid(src_user_buf, size)) {
+    return false;
   }
 
-  void* kbuf = malloc (size);
-  if (kbuf == NULL) {
-    return NULL;
-  }
-
-  memcpy (kbuf, user_buf_ptr, size);
-  return kbuf;
+  memcpy (dest_buf, src_user_buf, size);
+  return true;
 }
 
 uint32_t get_userland_double_word (void* uptr, bool* success) {

@@ -135,18 +135,3 @@ void exit_curr_process(int exit_code, bool should_print_exit_code) {
   NOT_REACHED ();
 }
 
-void parse_executable_command (struct start_process_arg* process_args, const char* command) {
-  process_args->parent_tid = thread_current()->tid;
-  strlcpy (process_args->filename, command, PROCESS_ARGS_SIZE);
-  process_args->num_args = 0;
-  
-  for (char *save_ptr, *token = strtok_r (process_args->filename, " ", &save_ptr); 
-          process_args->num_args < MAX_ARGS && token != NULL; 
-          token = strtok_r (NULL, " ", &save_ptr)) {
-
-        process_args->args[process_args->num_args] = token;
-        process_args->num_args++;
-  }
-
-  ASSERT (process_args->num_args > 0);
-}

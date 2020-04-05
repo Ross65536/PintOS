@@ -9,6 +9,9 @@
 #include "threads/thread.h"
 #include "process.h"
 #include "vm.h"
+#include "threads/vaddr.h"
+
+#define SYSCALL_ERROR -1
 
 static void syscall_handler (struct intr_frame *);
 
@@ -43,10 +46,20 @@ static inline void set_ret_val (struct intr_frame *f, int ret) {
 }
 
 static size_t write(int fd, char* buf, size_t size) {
+  if (size > PGSIZE) {
+    return SYSCALL_ERROR;
+  }
+
   if (fd == STDOUT_FILENO) {
-    char* kbuf = (char*) get_userland_buffer (buf, size);
-    if (kbuf == NULL)
-      return -1;
+    char* kbuf = malloc (size);
+    if (kbuf == NULL) {
+      return SYSCALL_ERROR;
+    }
+
+    if (! get_userland_buffer (buf, kbuf, size)) {
+      free (kbuf); 
+      return SYSCALL_ERROR;
+    }
 
     putbuf (kbuf, size);
     free (kbuf);    
@@ -83,7 +96,9 @@ syscall_handler (struct intr_frame *f)
       exit_curr_process (exit_code, true);
       break; 
     }
-    case SYS_EXEC:
+    case SYS_EXEC: {
+
+    }
     case SYS_WAIT:
 
     // lab 2 files
