@@ -57,9 +57,6 @@ static size_t write(int fd, char* buf, size_t size) {
   NOT_REACHED ();
 }
 
-static void exit(int exit_code) {
-  exit_curr_process (exit_code, true);
-}
 
 static void
 syscall_handler (struct intr_frame *f) 
@@ -70,7 +67,7 @@ syscall_handler (struct intr_frame *f)
   switch (syscall_num) {
     // lab 2
     case SYS_HALT:
-      exit_curr_process (BAD_EXIT_CODE, false);
+      shutdown_power_off ();
       break;
     case SYS_WRITE: {
       const int fd = get_stack_int (&esp);
@@ -82,7 +79,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_EXIT:
     {
       const int exit_code = get_stack_int (&esp);
-      exit (exit_code);
+      exit_curr_process (exit_code, true);
       break; 
     }
     case SYS_EXEC:
