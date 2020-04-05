@@ -218,6 +218,56 @@ static void close(int fd) {
   process_close_file (thread_current ()->tid, fd);
 }
 
+static int filesize (int fd) {
+  if (fd < 0 || fd == STDIN_FILENO || fd == STDOUT_FILENO) {
+    return SYSCALL_ERROR;
+  }
+
+  struct file* file = get_process_open_file (thread_current()->tid, fd);
+  if (file == NULL) {
+    return SYSCALL_ERROR;
+  }
+
+  lock_acquire (&filesys_monitor);
+  const int ret = file_length (file);
+  lock_release (&filesys_monitor);
+
+  return ret;
+}
+
+static int tell (int fd) {
+  if (fd < 0 || fd == STDIN_FILENO || fd == STDOUT_FILENO) {
+    return SYSCALL_ERROR;
+  }
+
+  struct file* file = get_process_open_file (thread_current()->tid, fd);
+  if (file == NULL) {
+    return SYSCALL_ERROR;
+  }
+
+  lock_acquire (&filesys_monitor);
+  const int ret = file_tell (file);
+  lock_release (&filesys_monitor);
+
+  return ret;
+}
+
+static void seek (int fd, unsigned int position) {
+  if (fd < 0 || fd == STDIN_FILENO || fd == STDOUT_FILENO) {
+    return exit_curr_process (BAD_EXIT_CODE, true);
+  }
+
+  struct file* file = get_process_open_file (thread_current()->tid, fd);
+  if (file == NULL) {
+    return exit_curr_process (BAD_EXIT_CODE, true);
+  }
+
+  lock_acquire (&filesys_monitor);
+  file_seek (file, position);
+  lock_release (&filesys_monitor);
+}
+
+
 static void
 syscall_handler (struct intr_frame *f) 
 {
@@ -226,15 +276,9 @@ syscall_handler (struct intr_frame *f)
   const int syscall_num = get_stack_int (&esp);
   switch (syscall_num) {
     // lab 2
-    case SYS_HALT:
+    case SYS_HALT: {
       shutdown_power_off ();
       break;
-    case SYS_WRITE: {
-      const int fd = get_stack_int (&esp);
-      char* u_buf = (char*) get_stack_ptr (&esp);
-      const size_t cont = get_stack_int (&esp);
-      set_ret_val (f, write (fd, u_buf, cont));
-      return;
     }
     case SYS_EXIT:
     {
@@ -282,9 +326,29 @@ syscall_handler (struct intr_frame *f)
       set_ret_val (f, read (fd, u_buf, cont));
       return;
     }
-    case SYS_FILESIZE:
-    case SYS_SEEK:
-    case SYS_TELL:
+    case SYS_WRITE: {
+      const int fd = get_stack_int (&esp);
+      char* u_buf = (char*) get_stack_ptr (&esp);
+      const size_t cont = get_stack_int (&esp);
+      set_ret_val (f, write (fd, u_buf, cont));
+      return;
+    }
+    case SYS_FILESIZE: {
+      const int fd = get_stack_int (&esp);
+      set_ret_val (f, filesize (fd));
+      return;
+    }
+    case SYS_SEEK: {
+      const int fd = get_stack_int (&esp);
+      const unsigned int position = get_stack_double_word (&esp);
+      seek (fd, position);
+      return;
+    }
+    case SYS_TELL: {
+      const int fd = get_stack_int (&esp);
+      set_ret_val (f, tell (fd));
+      return;
+    }
 
     // lab 3 & 4
     case SYS_MMAP:
