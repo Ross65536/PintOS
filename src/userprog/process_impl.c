@@ -112,7 +112,7 @@ int collect_process_exit_code (tid_t tid) {
   return exit_code;
 }
 
-static void print_exit_code (tid_t tid) {
+void print_exit_code (tid_t tid) {
   lock_acquire (&process_exit_codes.monitor_lock);
 
   struct process_node* node = find_process (tid);

@@ -20,6 +20,7 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "vm.h"
+#include "threads/synch.h"
 
 #define MAX_ARGS 30
 
@@ -31,11 +32,18 @@ struct start_process_arg {
   size_t num_args;
   char* args[MAX_ARGS];
   tid_t parent_tid;
+  
+  // synch
+  struct semaphore created_sema;
+  bool child_failed;
 };
 
 static void parse_executable_command (struct start_process_arg* process_args, const char* command) {
   process_args->parent_tid = thread_current()->tid;
+  process_args->child_failed = false;
   strlcpy (process_args->command, command, MAX_PROCESS_ARGS_SIZE);
+  sema_init (&process_args->created_sema, 0);
+
   process_args->num_args = 0;
   
   for (char *save_ptr, *token = strtok_r (process_args->command, " ", &save_ptr); 
@@ -49,52 +57,6 @@ static void parse_executable_command (struct start_process_arg* process_args, co
   ASSERT (process_args->num_args > 0);
 }
 
-
-static int load_stack_args (uint8_t * kpage_bottom, uint8_t* upage_bottom, char* args[], size_t num_args) {
-
-  uint8_t * kpage_top = kpage_bottom + PGSIZE;
-  uint8_t * upage_top = upage_bottom + PGSIZE;
-
-  const size_t uargs_size = num_args + 1;
-  ASSERT (uargs_size <= MAX_ARGS + 1);
-  uint8_t* u_args[uargs_size];
-  u_args[uargs_size - 1] = NULL; // c's argv[] ends in NULL
-
-  size_t offset = 0;
-
-  for (size_t i = 0; i < num_args; i++) {
-    char* arg = args[i];
-
-    const size_t arg_offset = strlen (arg) + 1; // also count \0
-    offset += arg_offset;
-
-    strlcpy ((char*) (kpage_top - offset), arg, arg_offset);
-    u_args[i] = upage_top - offset;
-  }
-
-  // align pointers for arguments
-  offset += pointer_alignment_offset(kpage_top - offset, CALL_ARG_ALIGNMENT);
-
-  const size_t argv_arr_offset = uargs_size * sizeof (uint8_t *);
-  offset += argv_arr_offset;
-  memcpy (kpage_top - offset, u_args, argv_arr_offset);
-
-  const size_t argv_offset = CALL_ARG_ALIGNMENT;
-  const uint32_t u_argv_ptr =(uint32_t) upage_top - offset;   
-  offset += argv_offset;
-  int* argv_ptr = (int*) (kpage_top - offset);
-  *argv_ptr = u_argv_ptr;
-
-  const size_t argc_offset = CALL_ARG_ALIGNMENT;
-  offset += argc_offset;
-  int* argc_ptr = (int*) (kpage_top - offset);
-  *argc_ptr = num_args;
-
-  const size_t null_ret_offset = CALL_ARG_ALIGNMENT;
-  offset += null_ret_offset;
-
-  return offset;
-}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -117,10 +79,17 @@ process_execute (const char *exec_command)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (exec_command, PRI_DEFAULT, start_process, start_process_arg);
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR) {
     palloc_free_page (start_process_arg); 
-  else 
-    add_process (thread_current()->tid, tid, name);
+    return TID_ERROR;
+  }
+
+  sema_down (&start_process_arg->created_sema);
+  const bool failed = start_process_arg->child_failed;
+  palloc_free_page (start_process_arg);
+  if (failed) {
+    return TID_ERROR;
+  }
 
   return tid;
 }
@@ -141,14 +110,19 @@ start_process (void *arg)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (start_process_arg->args, start_process_arg->num_args, &if_.eip, &if_.esp);
 
-  tid_t tid = thread_current()->tid;
-  add_process (start_process_arg->parent_tid, tid, start_process_arg->args[0]);
-
   /* If load failed, quit. */
-  palloc_free_page (arg);
   if (!success) {
-    exit_curr_process (BAD_EXIT_CODE, true);
+
+    start_process_arg->child_failed = true;
+    sema_up (&start_process_arg->created_sema);
+    
+    thread_exit ();
   }
+
+  add_process (start_process_arg->parent_tid, thread_current()->tid, start_process_arg->args[0]);
+
+  start_process_arg->child_failed = false;
+  sema_up (&start_process_arg->created_sema);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -511,6 +485,52 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       upage += PGSIZE;
     }
   return true;
+}
+
+static int load_stack_args (uint8_t * kpage_bottom, uint8_t* upage_bottom, char* args[], size_t num_args) {
+
+  uint8_t * kpage_top = kpage_bottom + PGSIZE;
+  uint8_t * upage_top = upage_bottom + PGSIZE;
+
+  const size_t uargs_size = num_args + 1;
+  ASSERT (uargs_size <= MAX_ARGS + 1);
+  uint8_t* u_args[uargs_size];
+  u_args[uargs_size - 1] = NULL; // c's argv[] ends in NULL
+
+  size_t offset = 0;
+
+  for (size_t i = 0; i < num_args; i++) {
+    char* arg = args[i];
+
+    const size_t arg_offset = strlen (arg) + 1; // also count \0
+    offset += arg_offset;
+
+    strlcpy ((char*) (kpage_top - offset), arg, arg_offset);
+    u_args[i] = upage_top - offset;
+  }
+
+  // align pointers for arguments
+  offset += pointer_alignment_offset(kpage_top - offset, CALL_ARG_ALIGNMENT);
+
+  const size_t argv_arr_offset = uargs_size * sizeof (uint8_t *);
+  offset += argv_arr_offset;
+  memcpy (kpage_top - offset, u_args, argv_arr_offset);
+
+  const size_t argv_offset = CALL_ARG_ALIGNMENT;
+  const uint32_t u_argv_ptr =(uint32_t) upage_top - offset;   
+  offset += argv_offset;
+  int* argv_ptr = (int*) (kpage_top - offset);
+  *argv_ptr = u_argv_ptr;
+
+  const size_t argc_offset = CALL_ARG_ALIGNMENT;
+  offset += argc_offset;
+  int* argc_ptr = (int*) (kpage_top - offset);
+  *argc_ptr = num_args;
+
+  const size_t null_ret_offset = CALL_ARG_ALIGNMENT;
+  offset += null_ret_offset;
+
+  return offset;
 }
 
 /* Create a minimal stack by mapping a zeroed page at the top of

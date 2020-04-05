@@ -22,6 +22,6 @@ void add_process (tid_t parent_tid, tid_t tid, const char* name);
 void process_add_exit_code (tid_t tid, int exit_code);
 int collect_process_exit_code (tid_t tid);
 void exit_curr_process(int exit_code, bool should_print_exit_code);
-
+void print_exit_code (tid_t tid);
 
 #endif /* userprog/process.h */
