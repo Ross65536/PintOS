@@ -111,6 +111,24 @@ static bool create (char* file_path, unsigned int size) {
   return created;
 }
 
+static bool remove (char* file_path) {
+  char k_path[MAX_FILENAME_SIZE];
+  size_t num_read;
+  if (!get_userland_string(file_path, k_path, MAX_FILENAME_SIZE, &num_read)) {
+    exit_curr_process (BAD_EXIT_CODE, true);
+  }
+
+  if (num_read == MAX_FILENAME_SIZE) { 
+    return false;
+  }
+
+  lock_acquire (&filesys_monitor);
+  const bool removed = filesys_remove (k_path);
+  lock_release (&filesys_monitor);
+
+  return removed;
+}
+
 static void
 syscall_handler (struct intr_frame *f) 
 {
@@ -153,7 +171,11 @@ syscall_handler (struct intr_frame *f)
       set_ret_val (f, create (u_name, u_size));
       return; 
     }
-    case SYS_REMOVE:
+    case SYS_REMOVE: {
+      char* u_name = (char*) get_stack_ptr (&esp);
+      set_ret_val (f, remove (u_name));
+      return; 
+    }
     case SYS_OPEN:
     case SYS_FILESIZE:
     case SYS_READ:
