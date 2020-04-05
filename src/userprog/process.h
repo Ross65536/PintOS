@@ -29,5 +29,6 @@ void exit_curr_process(int exit_code, bool should_print_exit_code);
 void print_exit_code (tid_t tid);
 int add_process_open_file (tid_t tid, struct file* file);
 bool process_close_file (tid_t tid, int fd);
+struct file* get_process_open_file (tid_t tid, int fd);
 
 #endif /* userprog/process.h */

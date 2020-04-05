@@ -172,6 +172,26 @@ bool process_close_file (tid_t tid, int fd) {
   return true;
 }
 
+struct file* get_process_open_file (tid_t tid, int fd) {
+  ASSERT (fd >= 0);
+
+  lock_acquire (& processes.monitor_lock);
+  
+  struct process_node* node = find_process (tid);
+  ASSERT (node != NULL);
+
+  struct open_file_node* file_node = find_open_file (node, fd);
+  if (file_node == NULL) {
+    lock_release (& processes.monitor_lock);
+    return NULL;
+  }
+  struct file* file = file_node->file;
+  
+  lock_release (& processes.monitor_lock);
+
+  return file;
+}
+
 ////////////////////
 //// exit code /////
 ////////////////////

@@ -68,6 +68,9 @@ bool get_userland_string (void* src_user_buf, char* dest_buf, size_t dest_buf_si
   return true;
 }
 
+/**
+ * Returns true if valid buffer pointer.
+ */
 bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size) {
   if (! is_user_ptr_access_valid(src_user_buf, size)) {
     return false;

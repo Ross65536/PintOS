@@ -48,30 +48,47 @@ static inline void set_ret_val (struct intr_frame *f, int ret) {
   f->eax = ret;
 }
 
-static size_t write(int fd, char* buf, size_t size) {
-  if (size > PGSIZE || fd == STDIN_FILENO) {
+static int write(int fd, char* buf, size_t size) {
+  if (size > PGSIZE || fd == STDIN_FILENO || fd < 0) {
     return SYSCALL_ERROR;
   }
 
+  if (size == 0) {
+    return 0;
+  }
+
+  struct file* file = NULL; 
+  if (fd != STDOUT_FILENO) {
+    file = get_process_open_file (thread_current()->tid, fd);
+    if (file == NULL) {
+      return SYSCALL_ERROR;
+    }
+  }
+
+  char* kbuf = malloc (size);
+  if (kbuf == NULL) {
+    return SYSCALL_ERROR;
+  }
+
+  if (! get_userland_buffer (buf, kbuf, size)) {
+    free (kbuf); 
+    exit_curr_process (BAD_EXIT_CODE, true);
+    NOT_REACHED ();
+  }
+
   if (fd == STDOUT_FILENO) {
-    char* kbuf = malloc (size);
-    if (kbuf == NULL) {
-      return SYSCALL_ERROR;
-    }
-
-    if (! get_userland_buffer (buf, kbuf, size)) {
-      free (kbuf); 
-      return SYSCALL_ERROR;
-    }
-
     putbuf (kbuf, size);
     free (kbuf);    
     return size;
   } 
   
-  printf ("not implemented yet");
-  exit_curr_process (BAD_EXIT_CODE, true);
-  NOT_REACHED ();
+  lock_acquire (&filesys_monitor);
+  const int ret_size = file_write (file, kbuf, size);
+  lock_release (&filesys_monitor);
+
+  free (kbuf);    
+
+  return ret_size;
 }
 
 static pid_t exec (char* cmd_line) {
