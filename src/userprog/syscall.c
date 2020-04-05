@@ -152,6 +152,14 @@ static int open (char* file_path) {
   return fd;
 }
 
+static void close(int fd) {
+  if (fd < 0) {
+    return;
+  }
+
+  process_close_file (thread_current ()->tid, fd);
+}
+
 static void
 syscall_handler (struct intr_frame *f) 
 {
@@ -204,11 +212,15 @@ syscall_handler (struct intr_frame *f)
       set_ret_val (f, open (u_name));
       return; 
     }
+    case SYS_CLOSE: {
+      const int fd = get_stack_int (&esp);
+      close (fd);
+      return;
+    }
     case SYS_FILESIZE:
     case SYS_READ:
     case SYS_SEEK:
     case SYS_TELL:
-    case SYS_CLOSE:
 
     // lab 3 & 4
     case SYS_MMAP:

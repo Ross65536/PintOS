@@ -61,6 +61,8 @@ static struct process_node* find_process (tid_t tid) {
   return list_entry (found, struct process_node, elem);
 }
 
+
+
 static void remove_process (struct process_node* node) {
   list_remove (&node->elem);
   free (node);
@@ -97,6 +99,21 @@ void add_process (tid_t parent_tid, tid_t tid, const char* name) {
 //// files /////////
 ////////////////////
 
+static bool open_file_eq (const struct list_elem *list_elem, const struct list_elem *_ UNUSED, void *aux) {
+  struct open_file_node* node = list_entry (list_elem, struct open_file_node, elem);
+  int target = *((int *) aux);
+
+  return node->fd == target;
+}
+
+static struct open_file_node* find_open_file (struct process_node * process, int fd) {
+  struct list_elem * found = list_find (&process->open_files, open_file_eq, NULL, &fd); 
+  if (found == NULL)
+    return NULL;
+
+  return list_entry (found, struct open_file_node, elem);
+}
+
 int add_process_open_file (tid_t tid, struct file* file) {
   lock_acquire (& processes.monitor_lock);
 
@@ -115,23 +132,45 @@ int add_process_open_file (tid_t tid, struct file* file) {
   return fd;
 }
 
+static void close_file (struct open_file_node* file_node) {
+  lock_acquire (&filesys_monitor);
+  file_close (file_node->file);
+  lock_release (&filesys_monitor);
+
+  free (file_node); 
+}
+
 // monitor lock must be held previously
 static void close_open_files (struct process_node* node) {
-
   while (!list_empty (&node->open_files))
   {
     struct list_elem *e = list_pop_front (&node->open_files);
     struct open_file_node* file_node = list_entry (e, struct open_file_node, elem); 
 
-    lock_acquire (&filesys_monitor);
-    file_close (file_node->file);
-    lock_release (&filesys_monitor);
-
-    free (file_node); 
+    close_file (file_node);
   }
-
 }
 
+bool process_close_file (tid_t tid, int fd) {
+  ASSERT (fd >= 0);
+
+  lock_acquire (& processes.monitor_lock);
+
+  struct process_node* node = find_process (tid);
+  ASSERT (node != NULL);
+
+  struct open_file_node* file_node = find_open_file (node, fd);
+  if (file_node == NULL) {
+    lock_release (& processes.monitor_lock);
+    return false;
+  }
+
+  list_remove (&file_node->elem);
+  close_file (file_node);
+
+  lock_release (& processes.monitor_lock);
+  return true;
+}
 
 ////////////////////
 //// exit code /////
@@ -148,6 +187,7 @@ void process_add_exit_code (tid_t tid, int exit_code) {
 
   struct process_node* node = find_process (tid);
   ASSERT (node != NULL);
+  ASSERT (! node->exited); // this must be called only once
 
   close_open_files (node);
 
