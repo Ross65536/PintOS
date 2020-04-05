@@ -72,11 +72,18 @@ bool get_userland_string (void* src_user_buf, char* dest_buf, size_t dest_buf_si
  * Returns true if valid buffer pointer.
  */
 bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size) {
-  if (! is_user_ptr_access_valid(src_user_buf, size)) {
-    return false;
+  uint8_t* dest = (uint8_t*) dest_buf;
+  uint8_t* src = (uint8_t*) src_user_buf;
+  uint32_t* pagedir = thread_current()->pagedir;
+
+  for (size_t i = 0; i < size; i++) {
+    if (! is_user_ptr_valid(pagedir, src + i)) {
+      return false;
+    }
+
+    dest[i] = src[i];
   }
 
-  memcpy (dest_buf, src_user_buf, size);
   return true;
 }
 
@@ -84,11 +91,18 @@ bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size) {
  * Returns true if valid buffer pointer.
  */
 bool set_userland_buffer (void* dest_user_buf, void* src_buf, size_t size) {
-  if (! is_user_ptr_access_valid(dest_user_buf, size)) {
-    return false;
+  uint8_t* dest = (uint8_t*) dest_user_buf;
+  uint8_t* src = (uint8_t*) src_buf;
+  uint32_t* pagedir = thread_current()->pagedir;
+
+  for (size_t i = 0; i < size; i++) {
+    if (! is_user_ptr_valid(pagedir, dest + i)) {
+      return false;
+    }
+
+    dest[i] = src[i];
   }
 
-  memcpy (dest_user_buf, src_buf, size);
   return true;
 }
 

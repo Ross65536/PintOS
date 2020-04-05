@@ -51,7 +51,7 @@ static inline void set_ret_val (struct intr_frame *f, int ret) {
 }
 
 static int write (int fd, char* buf, size_t size) {
-  if (size > PGSIZE || fd == STDIN_FILENO || fd < 0) {
+  if (fd == STDIN_FILENO || fd < 0) {
     return SYSCALL_ERROR;
   }
 
@@ -92,7 +92,7 @@ static int write (int fd, char* buf, size_t size) {
 }
 
 static int read (int fd, char* buf, size_t size) {
-  if (size > PGSIZE || fd == STDOUT_FILENO || fd < 0) {
+  if (fd == STDOUT_FILENO || fd < 0) {
     return SYSCALL_ERROR;
   }
 
