@@ -240,6 +240,11 @@ kgetline (char* bufptr, size_t n)
       } 
 
     }
-  
+}
 
+void input_getchars (uint8_t* dest_buf, size_t buf_size) {
+  for (size_t i = 0; i < buf_size; i++) {
+    uint8_t c = input_getc ();
+    dest_buf[i] = c;
+  }
 }

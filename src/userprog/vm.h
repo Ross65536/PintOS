@@ -10,5 +10,6 @@ void* increment_ptr(void* ptr, int increment);
 uint32_t get_userland_double_word (void* ptr, bool* success);
 bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size);
 bool get_userland_string (void* src_user_buf, char* dest_buf, size_t dest_buf_size, size_t* num_written);
+bool set_userland_buffer (void* dest_user_buf, void* src_buf, size_t size);
 
 #endif

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <kernel/stdio.h>
+#include <kernel/console.h>
 
 #include "devices/shutdown.h"
 #include "threads/malloc.h"
@@ -12,6 +13,7 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "filesys/filesys.h"
+
 
 #define SYSCALL_ERROR -1
 #define MAX_FILENAME_SIZE 15
@@ -48,21 +50,13 @@ static inline void set_ret_val (struct intr_frame *f, int ret) {
   f->eax = ret;
 }
 
-static int write(int fd, char* buf, size_t size) {
+static int write (int fd, char* buf, size_t size) {
   if (size > PGSIZE || fd == STDIN_FILENO || fd < 0) {
     return SYSCALL_ERROR;
   }
 
   if (size == 0) {
     return 0;
-  }
-
-  struct file* file = NULL; 
-  if (fd != STDOUT_FILENO) {
-    file = get_process_open_file (thread_current()->tid, fd);
-    if (file == NULL) {
-      return SYSCALL_ERROR;
-    }
   }
 
   char* kbuf = malloc (size);
@@ -78,9 +72,15 @@ static int write(int fd, char* buf, size_t size) {
 
   if (fd == STDOUT_FILENO) {
     putbuf (kbuf, size);
-    free (kbuf);    
+    free (kbuf);
     return size;
   } 
+
+  struct file* file = get_process_open_file (thread_current()->tid, fd);
+  if (file == NULL) {
+    free (kbuf);
+    return SYSCALL_ERROR;
+  }
   
   lock_acquire (&filesys_monitor);
   const int ret_size = file_write (file, kbuf, size);
@@ -89,6 +89,47 @@ static int write(int fd, char* buf, size_t size) {
   free (kbuf);    
 
   return ret_size;
+}
+
+static int read (int fd, char* buf, size_t size) {
+  if (size > PGSIZE || fd == STDOUT_FILENO || fd < 0) {
+    return SYSCALL_ERROR;
+  }
+
+  if (size == 0) {
+    return 0;
+  }
+
+  char* kbuf = malloc (size);
+  if (kbuf == NULL) {
+    return SYSCALL_ERROR;
+  }
+
+  int buf_size = -1;
+  if (fd == STDIN_FILENO) {
+    input_getchars ((uint8_t*) kbuf, size);
+    buf_size = size;
+  } else {
+
+    struct file* file = get_process_open_file (thread_current()->tid, fd);
+    if (file == NULL) {
+      free (kbuf);
+      return SYSCALL_ERROR;
+    }
+
+    lock_acquire (&filesys_monitor);
+    buf_size = file_read (file, kbuf, size); 
+    lock_release (&filesys_monitor);
+  }
+
+  const bool ok_write = set_userland_buffer (buf, kbuf, buf_size);
+  free (kbuf);    
+  if (!ok_write) {
+    exit_curr_process (BAD_EXIT_CODE, true);
+    NOT_REACHED ();
+  }
+
+  return buf_size;
 }
 
 static pid_t exec (char* cmd_line) {
@@ -234,8 +275,14 @@ syscall_handler (struct intr_frame *f)
       close (fd);
       return;
     }
+    case SYS_READ: {
+      const int fd = get_stack_int (&esp);
+      char* u_buf = (char*) get_stack_ptr (&esp);
+      const size_t cont = get_stack_double_word (&esp);
+      set_ret_val (f, read (fd, u_buf, cont));
+      return;
+    }
     case SYS_FILESIZE:
-    case SYS_READ:
     case SYS_SEEK:
     case SYS_TELL:
 

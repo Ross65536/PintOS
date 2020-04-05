@@ -80,6 +80,18 @@ bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size) {
   return true;
 }
 
+/**
+ * Returns true if valid buffer pointer.
+ */
+bool set_userland_buffer (void* dest_user_buf, void* src_buf, size_t size) {
+  if (! is_user_ptr_access_valid(dest_user_buf, size)) {
+    return false;
+  }
+
+  memcpy (dest_user_buf, src_buf, size);
+  return true;
+}
+
 uint32_t get_userland_double_word (void* uptr, bool* success) {
   if (! is_user_ptr_access_valid(uptr, sizeof(uint32_t))) {
     *success = false;
