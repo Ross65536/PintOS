@@ -27,9 +27,7 @@ void* increment_ptr(void* ptr, int increment) {
   return (void*) addr; 
 }
 
-static inline bool is_user_ptr_valid (void* ptr) {
-  uint32_t* pagedir = thread_current()->pagedir;
-  
+static inline bool is_user_ptr_valid (uint32_t* pagedir, void* ptr) {  
   return is_user_vaddr (ptr) && is_ptr_page_mapped(pagedir, ptr);
 }
 
@@ -39,15 +37,15 @@ static bool is_user_ptr_access_valid (void* ptr, size_t size) {
   void* end_ptr = (void*) end_address;
   uint32_t* pagedir = thread_current()->pagedir;
   
-  return size < PGSIZE && is_user_vaddr(end_ptr) && is_user_vaddr (ptr) && 
-      is_ptr_page_mapped(pagedir, ptr) && is_ptr_page_mapped (pagedir, end_ptr);
+  return size < PGSIZE && is_user_ptr_valid (pagedir, ptr) && is_user_ptr_valid(pagedir, end_ptr);
 }
 
 bool get_userland_string (void* src_user_buf, char* dest_buf, size_t dest_buf_size) {
   char* user_src = (char*) src_user_buf;
+  uint32_t* pagedir = thread_current()->pagedir;
 
   for (size_t i = 0; i < dest_buf_size; i++, user_src++) {
-    if (! is_user_ptr_valid (user_src)) {
+    if (! is_user_ptr_valid (pagedir, user_src)) {
       dest_buf[i] = 0;
       return false;
     }
