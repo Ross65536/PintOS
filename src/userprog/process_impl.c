@@ -15,6 +15,7 @@ struct process_node {
   char name[PROCESS_MAX_NAME];
   tid_t parent_tid;
   tid_t tid;
+  struct list_elem elem;
 
   // exit codes
   struct condition cond_exited;
@@ -24,8 +25,8 @@ struct process_node {
   // files
   int fd_counter;
   struct list open_files;
+  struct file* exec_file;
 
-  struct list_elem elem;
 };
 
 struct open_file_node {
@@ -70,7 +71,7 @@ static void remove_process (struct process_node* node) {
 
 
 
-void add_process (tid_t parent_tid, tid_t tid, const char* name) {
+void add_process (tid_t parent_tid, tid_t tid, const char* name, struct file* exec_file) {
   ASSERT (! intr_context());
 
   lock_acquire (& processes.monitor_lock);
@@ -89,6 +90,7 @@ void add_process (tid_t parent_tid, tid_t tid, const char* name) {
   cond_init(&node->cond_exited);
   list_init (&node->open_files);
   node->fd_counter = 2;
+  node->exec_file = exec_file;
 
   list_push_back (& processes.processes, &node->elem);
 
@@ -142,6 +144,10 @@ static void close_file (struct open_file_node* file_node) {
 
 // monitor lock must be held previously
 static void close_open_files (struct process_node* node) {
+  lock_acquire (&filesys_monitor);
+  file_close (node->exec_file);
+  lock_release (&filesys_monitor);
+
   while (!list_empty (&node->open_files))
   {
     struct list_elem *e = list_pop_front (&node->open_files);
@@ -176,7 +182,7 @@ struct file* get_process_open_file (tid_t tid, int fd) {
   ASSERT (fd >= 0);
 
   lock_acquire (& processes.monitor_lock);
-  
+
   struct process_node* node = find_process (tid);
   ASSERT (node != NULL);
 

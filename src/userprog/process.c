@@ -25,7 +25,7 @@
 #define MAX_ARGS 30
 
 static thread_func start_process NO_RETURN;
-static bool load (char* args[], size_t num_args, void (**eip) (void), void **esp);
+struct file* load (char* args[], size_t num_args, void (**eip) (void), void **esp) ;
 
 struct start_process_arg {
   char command[MAX_PROCESS_ARGS_SIZE];
@@ -101,25 +101,23 @@ start_process (void *arg)
 {
   struct start_process_arg *start_process_arg = arg;
   struct intr_frame if_;
-  bool success;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (start_process_arg->args, start_process_arg->num_args, &if_.eip, &if_.esp);
+  struct file* exec_file = load (start_process_arg->args, start_process_arg->num_args, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  if (!success) {
-
+  if (exec_file == NULL) {
     start_process_arg->child_failed = true;
     sema_up (&start_process_arg->created_sema);
     
     thread_exit ();
   }
 
-  add_process (start_process_arg->parent_tid, thread_current()->tid, start_process_arg->args[0]);
+  add_process (start_process_arg->parent_tid, thread_current()->tid, start_process_arg->args[0], exec_file);
 
   start_process_arg->child_failed = false;
   sema_up (&start_process_arg->created_sema);
@@ -266,8 +264,8 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
-   Returns true if successful, false otherwise. */
-bool load (char* args[], size_t num_args, void (**eip) (void), void **esp) 
+   Returns file used as executable if successful, NULL otherwise. */
+struct file* load (char* args[], size_t num_args, void (**eip) (void), void **esp) 
 {
   const char *file_name = args[0];
 
@@ -293,6 +291,7 @@ bool load (char* args[], size_t num_args, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+  file_deny_write (file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -377,9 +376,14 @@ bool load (char* args[], size_t num_args, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  if (! success) {
+    file_close (file);
+    lock_release (&filesys_monitor);
+    return NULL;
+  }
+
   lock_release (&filesys_monitor);
-  return success;
+  return file;
 }
 
 /* load() helpers. */
