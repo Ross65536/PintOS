@@ -28,7 +28,6 @@
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
-#include "userprog/process_exit.h"
 #else
 #include "tests/threads/tests.h"
 #endif
@@ -131,7 +130,7 @@ pintos_init (void)
 #endif
 
 #ifdef USERPROG
-  process_exit_init ();
+  process_impl_init ();
 #endif 
 
   printf ("Boot complete.\n");

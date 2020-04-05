@@ -2,11 +2,12 @@
 #include <syscall-nr.h>
 #include <kernel/stdio.h>
 
+#include "devices/shutdown.h"
 #include "threads/malloc.h"
 #include "userprog/syscall.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "process_exit.h"
+#include "process.h"
 #include "vm.h"
 
 static void syscall_handler (struct intr_frame *);

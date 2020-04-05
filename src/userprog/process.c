@@ -19,36 +19,11 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
-#include "process_exit.h"
 #include "vm.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (char* args[], size_t num_args, void (**eip) (void), void **esp);
 
-#define PROCESS_ARGS_SIZE 256
-#define MAX_ARGS 30
-struct start_process_arg {
-  char filename[PROCESS_ARGS_SIZE];
-  size_t num_args;
-  char* args[MAX_ARGS];
-  tid_t parent_tid;
-};
-
-static void init_start_process_arg (struct start_process_arg* process_args, const char* file_name) {
-  process_args->parent_tid = thread_current()->tid;
-  strlcpy (process_args->filename, file_name, PROCESS_ARGS_SIZE);
-  process_args->num_args = 0;
-  
-  for (char *save_ptr, *token = strtok_r (process_args->filename, " ", &save_ptr); 
-          process_args->num_args < MAX_ARGS && token != NULL; 
-          token = strtok_r (NULL, " ", &save_ptr)) {
-
-        process_args->args[process_args->num_args] = token;
-        process_args->num_args++;
-  }
-
-  ASSERT (process_args->num_args > 0);
-}
 
 static int load_stack_args (uint8_t * kpage_bottom, uint8_t* upage_bottom, char* args[], size_t num_args) {
 
@@ -111,7 +86,7 @@ process_execute (const char *file_name)
   if (start_process_arg == NULL)
     return TID_ERROR;
   
-  init_start_process_arg (start_process_arg, file_name);
+  parse_executable_command (start_process_arg, file_name);
   char name[PROCESS_MAX_NAME];
   strlcpy (name, start_process_arg->args[0], PROCESS_MAX_NAME);
 
@@ -120,7 +95,7 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (start_process_arg); 
   else 
-    add_process_exit_elem (thread_current()->tid, tid, name);
+    add_process (thread_current()->tid, tid, name);
 
   return tid;
 }
@@ -142,7 +117,7 @@ start_process (void *arg)
   success = load (start_process_arg->args, start_process_arg->num_args, &if_.eip, &if_.esp);
 
   tid_t tid = thread_current()->tid;
-  add_process_exit_elem (start_process_arg->parent_tid, tid, start_process_arg->args[0]);
+  add_process (start_process_arg->parent_tid, tid, start_process_arg->args[0]);
 
   /* If load failed, quit. */
   palloc_free_page (arg);

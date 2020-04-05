@@ -1,4 +1,4 @@
-#include "process_exit.h"
+#include "process.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/interrupt.h"
@@ -6,13 +6,16 @@
 #include <string.h>
 #include <stdio.h>
 
-struct process_exit_node {
+struct process_node {
   char name[PROCESS_MAX_NAME];
   tid_t parent_tid;
   tid_t tid;
+
+  // exit codes
   struct condition cond_exited;
   bool exited;
   int exit_code;
+
   struct list_elem elem;
 };
 
@@ -22,32 +25,32 @@ struct process_exit_codes {
 } process_exit_codes;
 
 void 
-process_exit_init () {
+process_impl_init () {
   list_init (&process_exit_codes.processes);
   lock_init (&process_exit_codes.monitor_lock);
 }
 
-static bool process_exit_eq (const struct list_elem *list_elem, const struct list_elem *_ UNUSED, void *aux) {
-  struct process_exit_node* node = list_entry (list_elem, struct process_exit_node, elem);
+static bool process_eq (const struct list_elem *list_elem, const struct list_elem *_ UNUSED, void *aux) {
+  struct process_node* node = list_entry (list_elem, struct process_node, elem);
   tid_t target = *((tid_t *) aux);
 
   return node->tid == target;
 }
 
-static struct process_exit_node* find_process (tid_t tid) {
-  struct list_elem * found = list_find (&process_exit_codes.processes, process_exit_eq, NULL, &tid); 
+static struct process_node* find_process (tid_t tid) {
+  struct list_elem * found = list_find (&process_exit_codes.processes, process_eq, NULL, &tid); 
   if (found == NULL)
     return NULL;
 
-  return list_entry (found, struct process_exit_node, elem);
+  return list_entry (found, struct process_node, elem);
 }
 
-static void remove_process (struct process_exit_node* node) {
+static void remove_process (struct process_node* node) {
   list_remove (&node->elem);
   free (node);
 }
 
-void add_process_exit_elem (tid_t parent_tid, tid_t tid, const char* name) {
+void add_process (tid_t parent_tid, tid_t tid, const char* name) {
   ASSERT (! intr_context());
 
   lock_acquire (& process_exit_codes.monitor_lock);
@@ -57,7 +60,7 @@ void add_process_exit_elem (tid_t parent_tid, tid_t tid, const char* name) {
     return;
   }
 
-  struct process_exit_node* node = malloc (sizeof (struct process_exit_node));
+  struct process_node* node = malloc (sizeof (struct process_node));
   strlcpy (node->name, name, PROCESS_MAX_NAME);
   node->parent_tid = parent_tid;
   node->tid = tid;
@@ -75,7 +78,7 @@ void process_add_exit_code (tid_t tid, int exit_code) {
   
   lock_acquire (& process_exit_codes.monitor_lock);
 
-  struct process_exit_node* node = find_process (tid);
+  struct process_node* node = find_process (tid);
   ASSERT (node != NULL);
 
   node->exited = true;
@@ -90,7 +93,7 @@ int collect_process_exit_code (tid_t tid) {
 
   lock_acquire (&process_exit_codes.monitor_lock);
 
-  struct process_exit_node* node = find_process (tid);
+  struct process_node* node = find_process (tid);
   tid_t parent_tid = thread_current ()->tid;
   if (node == NULL || parent_tid != node->parent_tid) {
     return BAD_EXIT_CODE;
@@ -111,7 +114,7 @@ int collect_process_exit_code (tid_t tid) {
 static void print_exit_code (tid_t tid) {
   lock_acquire (&process_exit_codes.monitor_lock);
 
-  struct process_exit_node* node = find_process (tid);
+  struct process_node* node = find_process (tid);
   ASSERT (node != NULL);
   ASSERT (node->exited);
   
@@ -128,6 +131,22 @@ void exit_curr_process(int exit_code, bool should_print_exit_code) {
   }
 
   thread_exit ();
-  
+
   NOT_REACHED ();
+}
+
+void parse_executable_command (struct start_process_arg* process_args, const char* command) {
+  process_args->parent_tid = thread_current()->tid;
+  strlcpy (process_args->filename, command, PROCESS_ARGS_SIZE);
+  process_args->num_args = 0;
+  
+  for (char *save_ptr, *token = strtok_r (process_args->filename, " ", &save_ptr); 
+          process_args->num_args < MAX_ARGS && token != NULL; 
+          token = strtok_r (NULL, " ", &save_ptr)) {
+
+        process_args->args[process_args->num_args] = token;
+        process_args->num_args++;
+  }
+
+  ASSERT (process_args->num_args > 0);
 }
