@@ -109,18 +109,38 @@ int add_process_open_file (tid_t tid, struct file* file) {
   node->fd_counter++;
   open_file->file = file;
   
-  list_push_back (&node->open_files, &node->elem);
+  list_push_back (&node->open_files, &open_file->elem);
 
   lock_release (& processes.monitor_lock);
   return fd;
 }
 
+// monitor lock must be held previously
+static void close_open_files (struct process_node* node) {
+
+  while (!list_empty (&node->open_files))
+  {
+    struct list_elem *e = list_pop_front (&node->open_files);
+    struct open_file_node* file_node = list_entry (e, struct open_file_node, elem); 
+
+    lock_acquire (&filesys_monitor);
+    file_close (file_node->file);
+    lock_release (&filesys_monitor);
+
+    free (file_node); 
+  }
+
+}
 
 
 ////////////////////
 //// exit code /////
 ////////////////////
 
+/**
+ * Supposed to be called immediately before process exit.
+ * Will close all open files.
+ */
 void process_add_exit_code (tid_t tid, int exit_code) {
   ASSERT (! intr_context());
   
@@ -128,6 +148,8 @@ void process_add_exit_code (tid_t tid, int exit_code) {
 
   struct process_node* node = find_process (tid);
   ASSERT (node != NULL);
+
+  close_open_files (node);
 
   node->exited = true;
   node->exit_code = exit_code;

@@ -60,7 +60,7 @@ thread_sleep_tick ()
   ASSERT (intr_context ());
 
   const int64_t curr_ticks = timer_ticks ();
-  if (! lock_try_acquire (&sleeping_threads.monitor_lock))
+  if (lock_held_by_current_thread(&sleeping_threads.monitor_lock) || ! lock_try_acquire (&sleeping_threads.monitor_lock))
     return;
 
   for (struct list_elem *e = list_begin (&sleeping_threads.sorted_threads); e != list_end (&sleeping_threads.sorted_threads); )
