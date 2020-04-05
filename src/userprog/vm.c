@@ -27,6 +27,12 @@ void* increment_ptr(void* ptr, int increment) {
   return (void*) addr; 
 }
 
+static inline bool is_user_ptr_valid (void* ptr) {
+  uint32_t* pagedir = thread_current()->pagedir;
+  
+  return is_user_vaddr (ptr) && is_ptr_page_mapped(pagedir, ptr);
+}
+
 static bool is_user_ptr_access_valid (void* ptr, size_t size) {
   const uint32_t address = (uint32_t) ptr;
   const uint32_t end_address = address + size;
@@ -35,6 +41,26 @@ static bool is_user_ptr_access_valid (void* ptr, size_t size) {
   
   return size < PGSIZE && is_user_vaddr(end_ptr) && is_user_vaddr (ptr) && 
       is_ptr_page_mapped(pagedir, ptr) && is_ptr_page_mapped (pagedir, end_ptr);
+}
+
+bool get_userland_string (void* src_user_buf, char* dest_buf, size_t dest_buf_size) {
+  char* user_src = (char*) src_user_buf;
+
+  for (size_t i = 0; i < dest_buf_size; i++, user_src++) {
+    if (! is_user_ptr_valid (user_src)) {
+      dest_buf[i] = 0;
+      return false;
+    }
+
+    const char c = *user_src;
+    dest_buf[i] = c;
+    if (c == 0) {
+      return true;
+    } 
+  }
+
+  dest_buf[dest_buf_size - 1] = 0;
+  return false;
 }
 
 bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size) {

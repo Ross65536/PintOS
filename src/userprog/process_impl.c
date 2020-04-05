@@ -96,6 +96,7 @@ int collect_process_exit_code (tid_t tid) {
   struct process_node* node = find_process (tid);
   tid_t parent_tid = thread_current ()->tid;
   if (node == NULL || parent_tid != node->parent_tid) {
+    lock_release (&process_exit_codes.monitor_lock);
     return BAD_EXIT_CODE;
   }
 

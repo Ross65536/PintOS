@@ -10,8 +10,12 @@ void process_activate (void);
 
 
 // process-impl
+typedef tid_t pid_t;
+#define PID_ERROR ((pid_t) -1)
+
 #define PROCESS_MAX_NAME 32
 #define BAD_EXIT_CODE -1
+#define MAX_PROCESS_ARGS_SIZE 256
 
 void process_impl_init (void);
 void add_process (tid_t parent_tid, tid_t tid, const char* name);

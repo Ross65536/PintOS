@@ -21,14 +21,13 @@
 #include "threads/malloc.h"
 #include "vm.h"
 
-#define PROCESS_ARGS_SIZE 256
 #define MAX_ARGS 30
 
 static thread_func start_process NO_RETURN;
 static bool load (char* args[], size_t num_args, void (**eip) (void), void **esp);
 
 struct start_process_arg {
-  char command[PROCESS_ARGS_SIZE];
+  char command[MAX_PROCESS_ARGS_SIZE];
   size_t num_args;
   char* args[MAX_ARGS];
   tid_t parent_tid;
@@ -36,7 +35,7 @@ struct start_process_arg {
 
 static void parse_executable_command (struct start_process_arg* process_args, const char* command) {
   process_args->parent_tid = thread_current()->tid;
-  strlcpy (process_args->command, command, PROCESS_ARGS_SIZE);
+  strlcpy (process_args->command, command, MAX_PROCESS_ARGS_SIZE);
   process_args->num_args = 0;
   
   for (char *save_ptr, *token = strtok_r (process_args->command, " ", &save_ptr); 

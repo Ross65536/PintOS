@@ -71,6 +71,19 @@ static size_t write(int fd, char* buf, size_t size) {
   NOT_REACHED ();
 }
 
+static pid_t exec (char* cmd_line) {
+  char c_cmd[MAX_PROCESS_ARGS_SIZE];
+  if (!get_userland_string(cmd_line, c_cmd, MAX_PROCESS_ARGS_SIZE)) {
+    return SYSCALL_ERROR;
+  }
+
+  tid_t child = process_execute (c_cmd);
+  if (child == TID_ERROR) {
+    return PID_ERROR;
+  }
+
+  return child;
+}
 
 static void
 syscall_handler (struct intr_frame *f) 
@@ -97,9 +110,15 @@ syscall_handler (struct intr_frame *f)
       break; 
     }
     case SYS_EXEC: {
-
+      char* u_buf = (char*) get_stack_ptr (&esp);
+      set_ret_val (f, exec (u_buf));
+      return;
     }
-    case SYS_WAIT:
+    case SYS_WAIT: {
+      const pid_t pid = get_stack_int (&esp);
+      set_ret_val (f, process_wait (pid));
+      return;
+    }
 
     // lab 2 files
     case SYS_CREATE:
