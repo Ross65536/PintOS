@@ -161,6 +161,8 @@ page_fault (struct intr_frame *f)
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
+
+  // hex_dump (f->ebp, (void*) f->ebp, 300, true);
   kill (f);
 }
 

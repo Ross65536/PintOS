@@ -75,14 +75,20 @@ static int load_stack_args (uint8_t * kpage_bottom, uint8_t* upage_bottom, char*
   // align pointers for arguments
   offset += pointer_alignment_offset(kpage_top - offset, CALL_ARG_ALIGNMENT);
 
-  const size_t argv_offset = uargs_size * sizeof (uint8_t *);
+  const size_t argv_arr_offset = uargs_size * sizeof (uint8_t *);
+  offset += argv_arr_offset;
+  memcpy (kpage_top - offset, u_args, argv_arr_offset);
+
+  const size_t argv_offset = CALL_ARG_ALIGNMENT;
+  const uint32_t u_argv_ptr =(uint32_t) upage_top - offset;   
   offset += argv_offset;
-  memcpy (kpage_top - offset, u_args, argv_offset);
+  int* argv_ptr = (int*) (kpage_top - offset);
+  *argv_ptr = u_argv_ptr;
 
   const size_t argc_offset = CALL_ARG_ALIGNMENT;
   offset += argc_offset;
-  int* argv_ptr = (int*) (kpage_top - offset);
-  *argv_ptr = num_args;
+  int* argc_ptr = (int*) (kpage_top - offset);
+  *argc_ptr = num_args;
 
   const size_t null_ret_offset = CALL_ARG_ALIGNMENT;
   offset += null_ret_offset;
@@ -141,9 +147,7 @@ start_process (void *arg)
   /* If load failed, quit. */
   palloc_free_page (arg);
   if (!success) {
-    process_add_exit_code(tid, -1);
-    print_exit_code (tid);
-    thread_exit ();
+    exit_curr_process (BAD_EXIT_CODE, true);
   }
 
   /* Start the user process by simulating a return from an
@@ -521,7 +525,7 @@ setup_stack (void **esp, char* args[], size_t num_args)
   if (kpage != NULL) 
     {
       uint8_t * upage_bottom = ((uint8_t *) PHYS_BASE) - PGSIZE;
-      const int offset = load_stack_args (kpage, upage_bottom, args, num_args);
+      const size_t offset = load_stack_args (kpage, upage_bottom, args, num_args);
       success = install_page (upage_bottom, kpage, true);
       if (success)
         *esp = PHYS_BASE - offset;

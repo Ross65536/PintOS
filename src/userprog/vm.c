@@ -2,11 +2,13 @@
 #include <stddef.h>
 #include <debug.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "vm.h"
 #include "threads/vaddr.h"
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
+#include "threads/malloc.h"
 
 size_t pointer_alignment_offset (void* ptr, size_t alignment) {
   ASSERT (ptr != NULL);
@@ -35,14 +37,31 @@ static bool is_user_ptr_access_valid (void* ptr, size_t size) {
       is_ptr_page_mapped(pagedir, ptr) && is_ptr_page_mapped (pagedir, end_ptr);
 }
 
-uint32_t get_userpage_int (void* ptr, bool* success) {
-  if (! is_user_ptr_access_valid(ptr, sizeof(uint32_t))) {
+/**
+ * Return malloc'd buffer with read data from user land on success. Null on failure.
+ */
+void* get_userland_buffer (void* user_buf_ptr, size_t size) {
+  if (! is_user_ptr_access_valid(user_buf_ptr, size)) {
+    return NULL;
+  }
+
+  void* kbuf = malloc (size);
+  if (kbuf == NULL) {
+    return NULL;
+  }
+
+  memcpy (kbuf, user_buf_ptr, size);
+  return kbuf;
+}
+
+uint32_t get_userland_double_word (void* uptr, bool* success) {
+  if (! is_user_ptr_access_valid(uptr, sizeof(uint32_t))) {
     *success = false;
     return -1;
   }
 
   *success = true;
-  uint32_t* int_ptr = (uint32_t*) ptr;
+  uint32_t* int_ptr = (uint32_t*) uptr;
   return *int_ptr;
 } 
 

@@ -11,6 +11,8 @@ void process_exit_init (void);
 void add_process_exit_elem (tid_t parent_tid, tid_t tid, const char* name);
 void process_add_exit_code (tid_t tid, int exit_code);
 int collect_process_exit_code (tid_t tid);
-void print_exit_code (tid_t tid);
-void abnormal_process_exit(void);
+void exit_curr_process(int exit_code, bool should_print_exit_code);
+
+
+
 #endif

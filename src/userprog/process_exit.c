@@ -108,7 +108,7 @@ int collect_process_exit_code (tid_t tid) {
   return exit_code;
 }
 
-void print_exit_code (tid_t tid) {
+static void print_exit_code (tid_t tid) {
   lock_acquire (&process_exit_codes.monitor_lock);
 
   struct process_exit_node* node = find_process (tid);
@@ -120,9 +120,14 @@ void print_exit_code (tid_t tid) {
   lock_release (&process_exit_codes.monitor_lock);
 }
 
-void abnormal_process_exit() {
+void exit_curr_process(int exit_code, bool should_print_exit_code) {
   tid_t tid = thread_current ()->tid;
-  process_add_exit_code (tid, BAD_EXIT_CODE);
-  print_exit_code (tid);
+  process_add_exit_code (tid, exit_code);
+  if (should_print_exit_code) {
+    print_exit_code (tid);
+  }
+
   thread_exit ();
+  
+  NOT_REACHED ();
 }
