@@ -284,6 +284,8 @@ bool load (char* args[], size_t num_args, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  lock_acquire (&filesys_monitor);
+
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
@@ -376,6 +378,7 @@ bool load (char* args[], size_t num_args, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+  lock_release (&filesys_monitor);
   return success;
 }
 

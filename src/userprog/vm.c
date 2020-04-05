@@ -40,25 +40,32 @@ static bool is_user_ptr_access_valid (void* ptr, size_t size) {
   return size < PGSIZE && is_user_ptr_valid (pagedir, ptr) && is_user_ptr_valid(pagedir, end_ptr);
 }
 
-bool get_userland_string (void* src_user_buf, char* dest_buf, size_t dest_buf_size) {
+/**
+ * Return true if user pointer valid. num_written is the num of characters read from userland excluding \0. 
+ * If num_written == dest_buf_size then the buffer has overflowed (but a \0 terminator is still written to it)
+ */
+bool get_userland_string (void* src_user_buf, char* dest_buf, size_t dest_buf_size, size_t* num_written) {
   char* user_src = (char*) src_user_buf;
   uint32_t* pagedir = thread_current()->pagedir;
 
   for (size_t i = 0; i < dest_buf_size; i++, user_src++) {
     if (! is_user_ptr_valid (pagedir, user_src)) {
       dest_buf[i] = 0;
+      *num_written = i;
       return false;
     }
 
     const char c = *user_src;
     dest_buf[i] = c;
     if (c == 0) {
+      *num_written = i;
       return true;
     } 
   }
 
   dest_buf[dest_buf_size - 1] = 0;
-  return false;
+  *num_written = dest_buf_size;
+  return true;
 }
 
 bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size) {

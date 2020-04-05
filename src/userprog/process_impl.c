@@ -6,6 +6,8 @@
 #include <string.h>
 #include <stdio.h>
 
+struct lock filesys_monitor;
+
 struct process_node {
   char name[PROCESS_MAX_NAME];
   tid_t parent_tid;
@@ -28,6 +30,7 @@ void
 process_impl_init () {
   list_init (&process_exit_codes.processes);
   lock_init (&process_exit_codes.monitor_lock);
+  lock_init (&filesys_monitor);
 }
 
 static bool process_eq (const struct list_elem *list_elem, const struct list_elem *_ UNUSED, void *aux) {

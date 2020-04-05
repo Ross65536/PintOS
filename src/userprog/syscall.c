@@ -10,8 +10,11 @@
 #include "process.h"
 #include "vm.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
+#include "filesys/filesys.h"
 
 #define SYSCALL_ERROR -1
+#define MAX_FILENAME_SIZE 15
 
 static void syscall_handler (struct intr_frame *);
 
@@ -73,8 +76,13 @@ static size_t write(int fd, char* buf, size_t size) {
 
 static pid_t exec (char* cmd_line) {
   char c_cmd[MAX_PROCESS_ARGS_SIZE];
-  if (!get_userland_string(cmd_line, c_cmd, MAX_PROCESS_ARGS_SIZE)) {
+  size_t num_read;
+  if (!get_userland_string(cmd_line, c_cmd, MAX_PROCESS_ARGS_SIZE, &num_read)) {
     exit_curr_process (BAD_EXIT_CODE, true);
+  }
+
+  if (num_read == MAX_PROCESS_ARGS_SIZE) {
+    return PID_ERROR;
   }
 
   tid_t child = process_execute (c_cmd);
@@ -83,6 +91,24 @@ static pid_t exec (char* cmd_line) {
   }
 
   return child;
+}
+
+static bool create (char* file_path, unsigned int size) {
+  char k_path[MAX_FILENAME_SIZE];
+  size_t num_read;
+  if (!get_userland_string(file_path, k_path, MAX_FILENAME_SIZE, &num_read)) {
+    exit_curr_process (BAD_EXIT_CODE, true);
+  }
+
+  if (num_read == MAX_FILENAME_SIZE) { 
+    return false;
+  }
+
+  lock_acquire (&filesys_monitor);
+  const bool created = filesys_create (k_path, size);
+  lock_release (&filesys_monitor);
+
+  return created;
 }
 
 static void
@@ -121,7 +147,12 @@ syscall_handler (struct intr_frame *f)
     }
 
     // lab 2 files
-    case SYS_CREATE:
+    case SYS_CREATE: {
+      char* u_name = (char*) get_stack_ptr (&esp);
+      unsigned int u_size = get_stack_double_word (&esp);
+      set_ret_val (f, create (u_name, u_size));
+      return; 
+    }
     case SYS_REMOVE:
     case SYS_OPEN:
     case SYS_FILESIZE:
