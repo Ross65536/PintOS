@@ -19,6 +19,7 @@
 
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "init.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -710,4 +711,8 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 tid_t current_thread_tid() {
   return thread_current ()->tid;
+}
+
+bool is_current_thread_userland () {
+  return thread_current()->pagedir != init_page_dir;
 }

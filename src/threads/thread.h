@@ -160,7 +160,7 @@ void thread_quantum_tick (void);
 bool is_idle_thread (struct thread* t);
 tid_t current_thread_tid(void);
 
-
+bool is_current_thread_userland (void);
 
 
 #endif /* threads/thread.h */

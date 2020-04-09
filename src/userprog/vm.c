@@ -27,18 +27,6 @@ void* increment_ptr(void* ptr, int increment) {
   return (void*) addr; 
 }
 
-static inline bool is_user_ptr_valid (uint32_t* pagedir, void* ptr) {  
-  return is_user_vaddr (ptr) && is_ptr_page_mapped(pagedir, ptr);
-}
-
-static bool is_user_ptr_access_valid (void* ptr, size_t size) {
-  const uint32_t address = (uint32_t) ptr;
-  const uint32_t end_address = address + size;
-  void* end_ptr = (void*) end_address;
-  uint32_t* pagedir = thread_current()->pagedir;
-  
-  return size < PGSIZE && is_user_ptr_valid (pagedir, ptr) && is_user_ptr_valid(pagedir, end_ptr);
-}
 
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
@@ -46,18 +34,14 @@ static bool is_user_ptr_access_valid (void* ptr, size_t size) {
    occurred. */
 static int get_user_byte (const uint8_t *uaddr)
 {
-  uint32_t* pagedir = thread_current()->pagedir;
-  if (! is_user_ptr_valid (pagedir, uaddr)) {
+  if (! is_user_vaddr (uaddr)) {
     return USERLAND_MEM_ERROR;
   }
 
-  const uint8_t byte = *uaddr;
-  return byte;
-
-  // int result;
-  // asm ("movl $1f, %0; movzbl %1, %0; 1:"
-  //      : "=&a" (result) : "m" (*uaddr));
-  // return result;
+  int result;
+  asm ("movl $1f, %0; movzbl %1, %0; 1:"
+       : "=&a" (result) : "m" (*uaddr));
+  return result;
 }
  
 /* Writes BYTE to user address UDST.
@@ -65,18 +49,14 @@ static int get_user_byte (const uint8_t *uaddr)
    Returns true if successful, false if a segfault occurred. */
 static bool put_user_byte (uint8_t *udst, uint8_t byte)
 {
-  uint32_t* pagedir = thread_current()->pagedir;
-  if (! is_user_ptr_valid (pagedir, udst)) {
+  if (! is_user_vaddr (udst)) {
     return false;
   }
 
-  *udst = byte;
-  return true;
-
-  // int error_code;
-  // asm ("movl $1f, %0; movb %b2, %1; 1:"
-  //      : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-  // return error_code != USERLAND_MEM_ERROR;
+  int error_code;
+  asm ("movl $1f, %0; movb %b2, %1; 1:"
+       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+  return error_code != USERLAND_MEM_ERROR;
 }
 
 

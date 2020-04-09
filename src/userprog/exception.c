@@ -5,6 +5,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "process.h"
+#include "vm.h"
+#include "threads/vaddr.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -85,7 +87,7 @@ kill(struct intr_frame *f)
   case SEL_UCSEG:
     /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
-    process_add_exit_code(current_thread_tid (), BAD_EXIT_CODE);
+    process_add_exit_code(current_thread_tid(), BAD_EXIT_CODE);
     printf("%s: dying due to interrupt %#04x (%s).\n",
            thread_name(), f->vec_no, intr_name(f->vec_no));
     intr_dump_frame(f);
@@ -144,7 +146,13 @@ page_fault(struct intr_frame *f)
   /* Count page faults. */
   page_fault_cnt++;
 
-  
+  if (f->cs == SEL_KCSEG && is_current_thread_userland() && is_user_vaddr(fault_addr))
+  {
+    uint32_t next_inst = f->eax;
+    f->eax = USERLAND_MEM_ERROR; 
+    f->eip = (void*) next_inst;
+    return;
+  }
 
   /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
@@ -160,9 +168,10 @@ page_fault(struct intr_frame *f)
          write ? "writing" : "reading",
          user ? "user" : "kernel");
 
-  if (f->cs == SEL_UCSEG) {
+  if (f->cs == SEL_UCSEG)
+  {
     exit_curr_process(BAD_EXIT_CODE, true);
-    NOT_REACHED ();
+    NOT_REACHED();
   }
 
   // hex_dump (f->ebp, (void*) f->ebp, 300, true);
