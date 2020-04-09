@@ -230,7 +230,7 @@ int collect_process_exit_code (tid_t tid) {
   lock_acquire (&processes.monitor_lock);
 
   struct process_node* node = find_process (tid);
-  tid_t parent_tid = thread_current ()->tid;
+  tid_t parent_tid = current_thread_tid ();
   if (node == NULL || parent_tid != node->parent_tid) {
     lock_release (&processes.monitor_lock);
     return BAD_EXIT_CODE;
@@ -261,7 +261,7 @@ void print_exit_code (tid_t tid) {
 }
 
 void exit_curr_process(int exit_code, bool should_print_exit_code) {
-  tid_t tid = thread_current ()->tid;
+  tid_t tid = current_thread_tid ();
   process_add_exit_code (tid, exit_code);
   if (should_print_exit_code) {
     print_exit_code (tid);

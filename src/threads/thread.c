@@ -297,7 +297,7 @@ thread_current (void)
 tid_t
 thread_tid (void) 
 {
-  return thread_current ()->tid;
+  return current_thread_tid ();
 }
 
 /* Deschedules the current thread and destroys it.  Never
@@ -707,3 +707,7 @@ bool is_idle_thread (struct thread* t) {
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+tid_t current_thread_tid() {
+  return thread_current ()->tid;
+}

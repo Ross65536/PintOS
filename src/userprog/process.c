@@ -39,7 +39,7 @@ struct start_process_arg {
 };
 
 static void parse_executable_command (struct start_process_arg* process_args, const char* command) {
-  process_args->parent_tid = thread_current()->tid;
+  process_args->parent_tid = current_thread_tid ();
   process_args->child_failed = false;
   strlcpy (process_args->command, command, MAX_PROCESS_ARGS_SIZE);
   sema_init (&process_args->created_sema, 0);
@@ -117,7 +117,7 @@ start_process (void *arg)
     thread_exit ();
   }
 
-  add_process (start_process_arg->parent_tid, thread_current()->tid, start_process_arg->args[0], exec_file);
+  add_process (start_process_arg->parent_tid, current_thread_tid (), start_process_arg->args[0], exec_file);
 
   start_process_arg->child_failed = false;
   sema_up (&start_process_arg->created_sema);
