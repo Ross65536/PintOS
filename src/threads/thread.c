@@ -713,6 +713,11 @@ tid_t current_thread_tid() {
   return thread_current ()->tid;
 }
 
+#ifdef USERPROG
+
 bool is_current_thread_userland () {
   return thread_current()->pagedir != init_page_dir;
 }
+
+
+#endif
