@@ -40,22 +40,62 @@ static bool is_user_ptr_access_valid (void* ptr, size_t size) {
   return size < PGSIZE && is_user_ptr_valid (pagedir, ptr) && is_user_ptr_valid(pagedir, end_ptr);
 }
 
+/* Reads a byte at user virtual address UADDR.
+   UADDR must be below PHYS_BASE.
+   Returns the byte value if successful, -1 if a segfault
+   occurred. */
+static int get_user_byte (const uint8_t *uaddr)
+{
+  uint32_t* pagedir = thread_current()->pagedir;
+  if (! is_user_ptr_valid (pagedir, uaddr)) {
+    return USERLAND_MEM_ERROR;
+  }
+
+  const uint8_t byte = *uaddr;
+  return byte;
+
+  // int result;
+  // asm ("movl $1f, %0; movzbl %1, %0; 1:"
+  //      : "=&a" (result) : "m" (*uaddr));
+  // return result;
+}
+ 
+/* Writes BYTE to user address UDST.
+   UDST must be below PHYS_BASE.
+   Returns true if successful, false if a segfault occurred. */
+static bool put_user_byte (uint8_t *udst, uint8_t byte)
+{
+  uint32_t* pagedir = thread_current()->pagedir;
+  if (! is_user_ptr_valid (pagedir, udst)) {
+    return false;
+  }
+
+  *udst = byte;
+  return true;
+
+  // int error_code;
+  // asm ("movl $1f, %0; movb %b2, %1; 1:"
+  //      : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+  // return error_code != USERLAND_MEM_ERROR;
+}
+
+
 /**
  * Return true if user pointer valid. num_written is the num of characters read from userland excluding \0. 
  * If num_written == dest_buf_size then the buffer has overflowed (but a \0 terminator is still written to it)
  */
 bool get_userland_string (void* src_user_buf, char* dest_buf, size_t dest_buf_size, size_t* num_written) {
-  char* user_src = (char*) src_user_buf;
-  uint32_t* pagedir = thread_current()->pagedir;
+  uint8_t* user_src = (uint8_t*) src_user_buf;
 
   for (size_t i = 0; i < dest_buf_size; i++, user_src++) {
-    if (! is_user_ptr_valid (pagedir, user_src)) {
+    const int access = get_user_byte (user_src);
+    if (access == USERLAND_MEM_ERROR) {
       dest_buf[i] = 0;
       *num_written = i;
       return false;
     }
 
-    const char c = *user_src;
+    const char c = access;
     dest_buf[i] = c;
     if (c == 0) {
       *num_written = i;
@@ -74,14 +114,15 @@ bool get_userland_string (void* src_user_buf, char* dest_buf, size_t dest_buf_si
 bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size) {
   uint8_t* dest = (uint8_t*) dest_buf;
   uint8_t* src = (uint8_t*) src_user_buf;
-  uint32_t* pagedir = thread_current()->pagedir;
 
   for (size_t i = 0; i < size; i++) {
-    if (! is_user_ptr_valid(pagedir, src + i)) {
+    const int access = get_user_byte (src + i);
+    if (access == USERLAND_MEM_ERROR) {
       return false;
     }
 
-    dest[i] = src[i];
+    const uint8_t byte = access;
+    dest[i] = byte;
   }
 
   return true;
@@ -93,28 +134,28 @@ bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size) {
 bool set_userland_buffer (void* dest_user_buf, void* src_buf, size_t size) {
   uint8_t* dest = (uint8_t*) dest_user_buf;
   uint8_t* src = (uint8_t*) src_buf;
-  uint32_t* pagedir = thread_current()->pagedir;
 
   for (size_t i = 0; i < size; i++) {
-    if (! is_user_ptr_valid(pagedir, dest + i)) {
+    if (! put_user_byte(dest+i, src[i]))
       return false;
-    }
-
-    dest[i] = src[i];
   }
 
   return true;
 }
 
+#define DOUBLE_WORD_SIZE (sizeof(uint32_t))
+
 uint32_t get_userland_double_word (void* uptr, bool* success) {
-  if (! is_user_ptr_access_valid(uptr, sizeof(uint32_t))) {
+  uint8_t dw[DOUBLE_WORD_SIZE];
+
+  if (! get_userland_buffer(uptr, dw, DOUBLE_WORD_SIZE)) {
     *success = false;
     return -1;
   }
 
   *success = true;
-  uint32_t* int_ptr = (uint32_t*) uptr;
-  return *int_ptr;
+  const uint32_t value = *((uint32_t*) dw);
+  return value;
 } 
 
 
