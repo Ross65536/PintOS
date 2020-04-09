@@ -8,6 +8,7 @@
 #include "synch.h"
 #include "scheduler.h"
 #include "mlfq-scheduler.h"
+#include "macros.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -159,10 +160,7 @@ void thread_quantum_tick (void);
 bool is_idle_thread (struct thread* t);
 tid_t current_thread_tid(void);
 
-#define MAX(a,b) \
-({ __typeof__ (a) _a = (a); \
-      __typeof__ (b) _b = (b); \
-   _a > _b ? _a : _b; })
+
 
 
 #endif /* threads/thread.h */
