@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <kernel/list.h>
+#include <kernel/hash.h>
 
 #include "process.h"
 #include "threads/malloc.h"
@@ -12,10 +13,10 @@
 struct lock filesys_monitor;
 
 struct process_node {
+  struct hash_elem elem;
   char name[PROCESS_MAX_NAME];
   tid_t parent_pid;
   tid_t pid; // the process pid, same as thread tid
-  struct list_elem elem;
 
   // exit codes
   struct condition cond_exited;
@@ -36,40 +37,43 @@ struct open_file_node {
 };
 
 struct processes {
-  struct list processes;
+  struct hash processes;
   struct lock monitor_lock;
 } processes;
 
+static unsigned int processes_hash_func (const struct hash_elem *e, void *_ UNUSED) {
+  struct process_node *p = hash_entry (e, struct process_node, elem);
+  return hash_int (p->pid);
+}
+
+static bool processes_hash_less_func (const struct hash_elem *l, const struct hash_elem *r, void *_ UNUSED) {
+  struct process_node *pl = hash_entry (l, struct process_node, elem);
+  struct process_node *pr = hash_entry (r, struct process_node, elem);
+
+  return pl->pid < pr->pid;
+}
+
 void 
 process_impl_init () {
-  list_init (&processes.processes);
+  hash_init (&processes.processes, processes_hash_func, processes_hash_less_func, NULL);
   lock_init (&processes.monitor_lock);
   lock_init (&filesys_monitor);
 }
 
-static bool process_eq (const struct list_elem *list_elem, const struct list_elem *_ UNUSED, void *aux) {
-  struct process_node* node = list_entry (list_elem, struct process_node, elem);
-  tid_t target = *((tid_t *) aux);
-
-  return node->pid == target;
-}
-
 static struct process_node* find_process (tid_t tid) {
-  struct list_elem * found = list_find (&processes.processes, process_eq, NULL, &tid); 
+  struct process_node node_find;
+  node_find.pid = tid;
+  struct hash_elem * found = hash_find (&processes.processes, &node_find.elem); 
   if (found == NULL)
     return NULL;
 
-  return list_entry (found, struct process_node, elem);
+  return hash_entry (found, struct process_node, elem);
 }
-
-
 
 static void remove_process (struct process_node* node) {
-  list_remove (&node->elem);
+  hash_delete (&processes.processes, &node->elem);
   free (node);
 }
-
-
 
 void add_process (tid_t parent_tid, tid_t tid, const char* name, struct file* exec_file) {
   ASSERT (! intr_context());
@@ -92,7 +96,7 @@ void add_process (tid_t parent_tid, tid_t tid, const char* name, struct file* ex
   node->fd_counter = 2;
   node->exec_file = exec_file;
 
-  list_push_back (& processes.processes, &node->elem);
+  hash_insert (& processes.processes, &node->elem);
 
   lock_release (& processes.monitor_lock);
 }
