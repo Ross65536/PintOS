@@ -13,8 +13,8 @@ struct lock filesys_monitor;
 
 struct process_node {
   char name[PROCESS_MAX_NAME];
-  tid_t parent_tid;
-  tid_t tid;
+  tid_t parent_pid;
+  tid_t pid; // the process pid, same as thread tid
   struct list_elem elem;
 
   // exit codes
@@ -51,7 +51,7 @@ static bool process_eq (const struct list_elem *list_elem, const struct list_ele
   struct process_node* node = list_entry (list_elem, struct process_node, elem);
   tid_t target = *((tid_t *) aux);
 
-  return node->tid == target;
+  return node->pid == target;
 }
 
 static struct process_node* find_process (tid_t tid) {
@@ -83,8 +83,8 @@ void add_process (tid_t parent_tid, tid_t tid, const char* name, struct file* ex
 
   struct process_node* node = malloc (sizeof (struct process_node));
   strlcpy (node->name, name, PROCESS_MAX_NAME);
-  node->parent_tid = parent_tid;
-  node->tid = tid;
+  node->parent_pid = parent_tid;
+  node->pid = tid;
   node->exited = false;
   node->exit_code = BAD_EXIT_CODE;
   cond_init(&node->cond_exited);
@@ -231,7 +231,7 @@ int collect_process_exit_code (tid_t tid) {
 
   struct process_node* node = find_process (tid);
   tid_t parent_tid = current_thread_tid ();
-  if (node == NULL || parent_tid != node->parent_tid) {
+  if (node == NULL || parent_tid != node->parent_pid) {
     lock_release (&processes.monitor_lock);
     return BAD_EXIT_CODE;
   }
