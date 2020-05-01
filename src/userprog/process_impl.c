@@ -55,7 +55,8 @@ static bool processes_hash_less_func (const struct hash_elem *l, const struct ha
 
 void 
 process_impl_init () {
-  hash_init (&processes.processes, processes_hash_func, processes_hash_less_func, NULL);
+  const bool ok = hash_init (&processes.processes, processes_hash_func, processes_hash_less_func, NULL);
+  ASSERT (ok);
   lock_init (&processes.monitor_lock);
   lock_init (&filesys_monitor);
 }

@@ -21,6 +21,7 @@
 #include "threads/malloc.h"
 #include "vm.h"
 #include "threads/synch.h"
+#include "vm/active_files.h"
 
 #define MAX_ARGS 30
 
@@ -257,9 +258,92 @@ struct Elf32_Phdr
 
 static bool setup_stack (void **esp, char* args[], size_t num_args);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
-static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
-                          uint32_t read_bytes, uint32_t zero_bytes,
-                          bool writable);
+
+/* Adds a mapping from user virtual address UPAGE to kernel 
+   virtual address KPAGE to the page table.
+   If WRITABLE is true, the user process may modify the page;
+   otherwise, it is read-only.
+   UPAGE must not already be mapped.
+   KPAGE should probably be a page obtained from the user pool
+   with palloc_get_page().
+   Returns true on success, false if UPAGE is already mapped or
+   if memory allocation fails. */
+static bool
+install_page (void *upage, void *kpage, bool writable)
+{
+  struct thread *t = thread_current ();
+
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  return (pagedir_get_page (t->pagedir, upage) == NULL
+          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+
+/* Loads a segment starting at offset OFS in FILE at address
+   UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
+   memory are initialized, as follows:
+
+        - READ_BYTES bytes at UPAGE must be read from FILE
+          starting at offset OFS.
+
+        - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
+
+   The pages initialized by this function must be writable by the
+   user process if WRITABLE is true, read-only otherwise.
+
+   Return true if successful, false if a memory allocation error
+   or disk read error occurs. */
+static bool
+load_segment (struct file *file, off_t ofs, uint8_t *upage,
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable, const char* file_name) 
+{
+  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+  ASSERT (pg_ofs (upage) == 0);
+  ASSERT (ofs % PGSIZE == 0);
+
+  file_seek (file, ofs);
+  while (read_bytes > 0 || zero_bytes > 0) 
+    {
+      /* Calculate how to fill this page.
+         We will read PAGE_READ_BYTES bytes from FILE
+         and zero the final PAGE_ZERO_BYTES bytes. */
+      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      if (page_zero_bytes < PGSIZE) {
+        off_t offset = file_tell(file);
+        struct file_offset_mapping* active_mapping = add_active_file_offset(&executable_files, file_name, offset);
+        ASSERT (active_mapping != NULL);
+      }
+
+      /* Get a page of memory. */
+      uint8_t *kpage = palloc_get_page (PAL_USER);
+      if (kpage == NULL)
+        return false;
+
+      /* Load this page. */
+      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+        {
+          palloc_free_page (kpage);
+          return false; 
+        }
+      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+      /* Add the page to the process's address space. */
+      if (!install_page (upage, kpage, writable)) 
+        {
+          palloc_free_page (kpage);
+          return false; 
+        }
+
+      /* Advance. */
+      read_bytes -= page_read_bytes;
+      zero_bytes -= page_zero_bytes;
+      upage += PGSIZE;
+    }
+  return true;
+}
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
@@ -356,7 +440,7 @@ struct file* load (char* args[], size_t num_args, void (**eip) (void), void **es
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
-                                 read_bytes, zero_bytes, writable))
+                                 read_bytes, zero_bytes, writable, file_name))
                 goto done;
             }
           else
@@ -388,7 +472,6 @@ struct file* load (char* args[], size_t num_args, void (**eip) (void), void **es
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -432,65 +515,6 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
     return false;
 
   /* It's okay. */
-  return true;
-}
-
-/* Loads a segment starting at offset OFS in FILE at address
-   UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
-   memory are initialized, as follows:
-
-        - READ_BYTES bytes at UPAGE must be read from FILE
-          starting at offset OFS.
-
-        - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
-
-   The pages initialized by this function must be writable by the
-   user process if WRITABLE is true, read-only otherwise.
-
-   Return true if successful, false if a memory allocation error
-   or disk read error occurs. */
-static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
-{
-  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-  ASSERT (pg_ofs (upage) == 0);
-  ASSERT (ofs % PGSIZE == 0);
-
-  file_seek (file, ofs);
-  while (read_bytes > 0 || zero_bytes > 0) 
-    {
-      /* Calculate how to fill this page.
-         We will read PAGE_READ_BYTES bytes from FILE
-         and zero the final PAGE_ZERO_BYTES bytes. */
-      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-      size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
-        return false;
-
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-
-      /* Advance. */
-      read_bytes -= page_read_bytes;
-      zero_bytes -= page_zero_bytes;
-      upage += PGSIZE;
-    }
   return true;
 }
 
@@ -562,22 +586,3 @@ setup_stack (void **esp, char* args[], size_t num_args)
   return success;
 }
 
-/* Adds a mapping from user virtual address UPAGE to kernel 
-   virtual address KPAGE to the page table.
-   If WRITABLE is true, the user process may modify the page;
-   otherwise, it is read-only.
-   UPAGE must not already be mapped.
-   KPAGE should probably be a page obtained from the user pool
-   with palloc_get_page().
-   Returns true on success, false if UPAGE is already mapped or
-   if memory allocation fails. */
-static bool
-install_page (void *upage, void *kpage, bool writable)
-{
-  struct thread *t = thread_current ();
-
-  /* Verify that there's not already a page at that virtual
-     address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
-}

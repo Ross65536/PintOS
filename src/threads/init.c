@@ -28,6 +28,10 @@
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
+
+// VM
+#include "vm/active_files.h"
+
 #else
 #include "tests/threads/tests.h"
 #endif
@@ -131,6 +135,7 @@ pintos_init (void)
 
 #ifdef USERPROG
   process_impl_init ();
+  init_active_files ();
 #endif 
 
   printf ("Boot complete.\n");
