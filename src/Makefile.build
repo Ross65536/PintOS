@@ -68,7 +68,10 @@ userprog_SRC += userprog/process_impl.c		# lab 2
 userprog_SRC += userprog/vm.c		# lab 2
 
 # No virtual memory code yet.
-vm_SRC = vm/active_files.c			# Some file.
+# lab 3
+vm_SRC += vm/active_files.c		
+vm_SRC += vm/strings_pool.c		
+vm_SRC += vm/file_page.c		
 
 # Filesystem code.
 filesys_SRC  = filesys/filesys.c	# Filesystem core.

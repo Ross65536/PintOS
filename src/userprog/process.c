@@ -22,6 +22,8 @@
 #include "vm.h"
 #include "threads/synch.h"
 #include "vm/active_files.h"
+#include "vm/strings_pool.h"
+#include "vm/file_page.h"
 
 #define MAX_ARGS 30
 
@@ -91,6 +93,9 @@ process_execute (const char *exec_command)
   if (failed) {
     return TID_ERROR;
   }
+
+  // print_active_files();
+  // print_strings_pool();
 
   return tid;
 }
@@ -303,6 +308,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (ofs % PGSIZE == 0);
 
   file_seek (file, ofs);
+  // printf("PAGE read=%d, zero=%d, writable=%d\n", read_bytes, zero_bytes, writable);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -311,9 +317,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      if (page_zero_bytes < PGSIZE) {
+      if (! writable) {
         off_t offset = file_tell(file);
-        struct file_offset_mapping* active_mapping = add_active_file_offset(&executable_files, file_name, offset);
+        // printf("read=%d, zero=%d upage=%x offset=%d| ", page_read_bytes, page_zero_bytes, upage, offset);
+
+        const char* str = add_string_pool (file_name);
+        ASSERT (str != NULL);
+        struct file_page_node* file_page = create_file_page_node(str, offset, page_zero_bytes);
+        ASSERT (file_page != NULL);
+        struct file_offset_mapping* active_mapping = add_active_file(file_page);
         ASSERT (active_mapping != NULL);
       }
 
@@ -424,6 +436,7 @@ struct file* load (char* args[], size_t num_args, void (**eip) (void), void **es
               uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
               uint32_t page_offset = phdr.p_vaddr & PGMASK;
               uint32_t read_bytes, zero_bytes;
+              // printf("phdr.p_offset=%d phdr.p_vaddr=%x phdr.p_filesz=%d\n", phdr.p_offset, phdr.p_vaddr, phdr.p_filesz);
               if (phdr.p_filesz > 0)
                 {
                   /* Normal segment.

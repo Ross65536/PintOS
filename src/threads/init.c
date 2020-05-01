@@ -31,6 +31,7 @@
 
 // VM
 #include "vm/active_files.h"
+#include "vm/strings_pool.h"
 
 #else
 #include "tests/threads/tests.h"
@@ -136,6 +137,7 @@ pintos_init (void)
 #ifdef USERPROG
   process_impl_init ();
   init_active_files ();
+  strings_pool_init ();
 #endif 
 
   printf ("Boot complete.\n");
