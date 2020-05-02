@@ -2,17 +2,20 @@
 #include <debug.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #include "frame_table.h"
 #include "threads/synch.h"
 #include "userprog/process_vm.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
+#include "page_common.h"
 
 struct frame_node {
   struct list_elem list_elem;
   struct list vm_nodes;
-
+  struct lock lock;
+  struct page_common page_common;
   void* phys_addr;
 
 };
@@ -35,11 +38,13 @@ static struct frame_node* create_frame_node(void) {
 
   list_init(&node->vm_nodes);
   node->phys_addr = NULL;
+  lock_init(&node->lock);
+  node->page_common.type = -1;
 
   return node;
 }
 
-struct frame_node* allocate_user_page(struct vm_node* process_vm) {
+struct frame_node* allocate_user_page() {
   lock_acquire (&frame_table.monitor);
 
   struct frame_node* node = create_frame_node();
@@ -47,15 +52,72 @@ struct frame_node* allocate_user_page(struct vm_node* process_vm) {
     return NULL;
   }
 
-  list_push_back(&node->vm_nodes, get_vm_node_list_elem(process_vm));
   
   void* kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   ASSERT (kpage != NULL); // TODO implement swapping
   node->phys_addr = kpage;
 
+  list_push_back(&frame_table.frames, &node->list_elem);
 
   lock_release (&frame_table.monitor);
 
   return node;
 }
 
+void add_frame_vm_page(struct frame_node* node, struct vm_node* page, struct page_common* common) {
+  ASSERT (node != NULL);
+  ASSERT (page != NULL);
+  ASSERT (common != NULL);
+
+  lock_acquire(&node->lock);
+ 
+  if (list_empty(&node->vm_nodes)) {
+    node->page_common = *common;
+  } else {
+    if (common->type == SHARED_EXECUTABLE) {
+      ASSERT (page_common_eq(&node->page_common, common));
+    } else {
+      NOT_REACHED();
+    }
+  }
+
+  list_push_back(&node->vm_nodes, get_vm_node_list_elem(page));
+
+  lock_release(&node->lock);
+}
+
+void destroy_frame(struct frame_node* node) {
+  ASSERT (node != NULL);
+
+  lock_acquire (&frame_table.monitor);
+  list_remove (&node->list_elem);
+
+  lock_acquire(&node->lock);
+  lock_release (&frame_table.monitor);
+
+  palloc_free_page(node->phys_addr);
+  // TODO implement writeback, etc
+
+  lock_release(&node->lock);
+
+  free(node);
+}
+
+
+void print_frame_table(void) {
+  lock_acquire (&frame_table.monitor);
+
+  printf ("Frame-table: \n");
+
+  for (struct list_elem *e = list_begin (&frame_table.frames); e != list_end (&frame_table.frames); e = list_next (e)) {
+    struct frame_node* node = list_entry(e, struct frame_node, list_elem);
+
+    printf ("(frame=%x, body=", (uintptr_t) node->phys_addr);
+    print_page_common (&node->page_common);
+    printf(")\n");
+  }
+
+  printf("---\n");
+
+  lock_release (&frame_table.monitor);
+}

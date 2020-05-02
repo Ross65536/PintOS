@@ -9,12 +9,15 @@
 #include "active_files.h"
 #include "filesys/off_t.h"
 #include "file_page.h"
+#include "frame_table.h"
+
 
 #define MAX_FILEPATH 256
 
 struct file_offset_mapping {
   struct hash_elem elem;
   struct file_page_node* file_page;
+  struct frame_node* frame;
   unsigned int process_ref_count;
 };
 
@@ -28,6 +31,7 @@ static struct file_offset_mapping* create_file_offset_mapping(struct file_page_n
 
   node->file_page = file_page;
   node->process_ref_count = 0;
+  node->frame = NULL;
   
   return node;
 }
@@ -111,10 +115,27 @@ void destroy_active_file (struct file_offset_mapping *node) {
   if (node->process_ref_count == 0) {
     ASSERT (hash_delete (&active_list.active_files, &node->elem) != NULL);
     destroy_file_page_node(node->file_page);
+    if (node->frame != NULL) {
+      destroy_frame(node->frame);
+    }
     free (node);
   }
 
   lock_release (&active_list.monitor);
+}
+
+struct frame_node* load_file_offset_mapping_page (struct file_offset_mapping *node) {
+  ASSERT (node != NULL);
+
+  lock_acquire (&active_list.monitor); // TODO maybe remove lock?
+
+  if (node->frame == NULL) {
+    node->frame = load_file_page_frame (node->file_page);
+  }
+  struct frame_node* frame = node->frame;
+  lock_release (&active_list.monitor);
+
+  return frame;
 }
 
 void print_file_offset_mapping (struct file_offset_mapping *node) {

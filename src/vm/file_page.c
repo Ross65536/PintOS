@@ -7,6 +7,7 @@
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
 #include "strings_pool.h"
+#include "frame_table.h"
 
 struct file_page_node {
   const char* file_path;
@@ -51,6 +52,14 @@ int file_page_node_cmp (struct file_page_node* node_l, struct file_page_node* no
   }
 
   return node_l->num_zero_padding - node_r->num_zero_padding;
+}
+
+struct frame_node* load_file_page_frame(struct file_page_node* node) {
+  struct frame_node* frame = allocate_user_page();
+
+  // TODO implement loading from file
+ 
+  return frame;
 }
 
 void print_file_page_node(struct file_page_node* node) { 

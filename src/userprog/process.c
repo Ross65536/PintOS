@@ -119,6 +119,7 @@ start_process (void *arg)
   // print_active_files();
   // print_strings_pool();
   // print_process_vm(find_current_thread_process());
+  // print_frame_table();
   
   /* If load failed, quit. */
   if (exec_file == NULL) {
@@ -311,7 +312,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (ofs % PGSIZE == 0);
 
   file_seek (file, ofs);
-  // printf("PAGE read=%d, zero=%d, writable=%d\n", read_bytes, zero_bytes, writable);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -321,9 +321,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       off_t offset = file_tell(file);
-      const bool ok = add_file_backed_vm(process_node, upage, file_name, offset, page_zero_bytes, !writable, true) != NULL;
-      ASSERT (ok);
-      // printf("read=%d, zero=%d upage=%x offset=%d| ", page_read_bytes, page_zero_bytes, upage, offset);
+
+      struct vm_node* node = add_file_backed_vm(process_node, upage, file_name, offset, page_zero_bytes, !writable, true);
+      if (node == NULL) {
+        return false;
+      }
+      activate_vm_page(node);
+      
         
 
       /* Get a page of memory. */

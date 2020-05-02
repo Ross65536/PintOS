@@ -8,8 +8,8 @@ static const char* page_source_type_to_string(enum page_source_type type) {
   switch (type) {
     case SHARED_EXECUTABLE:
       return "SHARED_EXECUTABLE";
-    case SHARED_FILE_BACKED:
-      return "SHARED_FILE_BACKED";
+    case FILE_BACKED_EXECUTABLE:
+      return "FILE_BACKED_EXECUTABLE";
     case FILE_BACKED:
       return "FILE_BACKED";
     case FREESTANDING:
@@ -28,7 +28,7 @@ void print_page_common(struct page_common* page_common) {
     case SHARED_EXECUTABLE:
       print_file_offset_mapping(page_common->body.shared_executable);
       break;
-    case SHARED_FILE_BACKED:
+    case FILE_BACKED_EXECUTABLE:
     case FILE_BACKED:
       print_file_page_node(page_common->body.file_backed);
       break;
@@ -39,4 +39,22 @@ void print_page_common(struct page_common* page_common) {
   }
 
   printf(")");
+}
+
+bool page_common_eq(struct page_common* l, struct page_common* r) {
+  if (l->type != r->type) {
+    return false;
+  }
+
+  switch (l->type) {
+    case SHARED_EXECUTABLE:
+      return l->body.shared_executable == r->body.shared_executable; 
+    case FILE_BACKED_EXECUTABLE:
+    case FILE_BACKED:
+      PANIC("NOT_IMPLEMENTED");
+    case FREESTANDING:
+      PANIC("NOT_IMPLEMENTED");
+    default:
+      PANIC("NOT_IMPLEMENTED");
+  }
 }

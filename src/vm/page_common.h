@@ -9,7 +9,7 @@
 
 enum page_source_type {
   SHARED_EXECUTABLE,
-  SHARED_FILE_BACKED,
+  FILE_BACKED_EXECUTABLE,
   FILE_BACKED,
   FREESTANDING
 };
@@ -30,7 +30,8 @@ struct page_common {
   union page_body body;
 };
 
-
+bool page_common_eq(struct page_common* l, struct page_common* r);
 void print_page_common(struct page_common* page_common);
+bool page_common_eq(struct page_common* l, struct page_common* r);
 
 #endif

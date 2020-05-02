@@ -11,5 +11,7 @@ struct file_offset_mapping* add_active_file(struct file_page_node* file_page); /
 void print_active_files (void);
 void print_file_offset_mapping (struct file_offset_mapping *node);
 void destroy_active_file (struct file_offset_mapping *node);
+struct frame_node* load_file_offset_mapping_page (struct file_offset_mapping *node);
+
 
 #endif 

@@ -269,6 +269,7 @@ void process_add_exit_code (struct process_node* node, int exit_code) {
 
   // print_active_files();
   // print_strings_pool();
+  // print_frame_table();
 }
 
 
@@ -328,10 +329,11 @@ void exit_curr_process(int exit_code, bool should_print_exit_code) {
 ////////////////////
 
 struct vm_node {
+  struct lock* process_lock; // parent process's lock
   struct hash_elem hash_elem;
   struct list_elem list_elem; // for frame_table
 
-  bool is_mapped;
+  struct frame_node* frame;
   uintptr_t page_vaddr;
   struct page_common page_common;
 };
@@ -356,9 +358,10 @@ struct list_elem* get_vm_node_list_elem(struct vm_node* node) {
 
 static struct vm_node* create_vm_node(void) {
   struct vm_node* node = malloc (sizeof (struct vm_node));
-  node->is_mapped = false;
   node->page_vaddr = 0;
   node->page_common.type = -1;
+  node->process_lock = NULL;
+  node->frame = NULL;
 
   return node;
 }
@@ -387,6 +390,7 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
   }
 
   node->page_vaddr = (uintptr_t) vaddr;
+  node->process_lock = &process->lock;
 
   if (readonly && exec_file_source) {
     node->page_common.type = SHARED_EXECUTABLE;
@@ -398,7 +402,7 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
       return NULL;
     }
   } else if (!readonly && exec_file_source) {
-    node->page_common.type = SHARED_FILE_BACKED;
+    node->page_common.type = FILE_BACKED_EXECUTABLE;
     node->page_common.body.file_backed = file_page;
   } else if (!readonly && !exec_file_source) {
     node->page_common.type = FILE_BACKED;
@@ -415,10 +419,40 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
   return node;
 }
 
+void activate_vm_page(struct vm_node* node) {
+  ASSERT (node != NULL);
+  ASSERT (node->frame == NULL);
+
+  lock_acquire (node->process_lock);
+
+  switch (node->page_common.type) {
+    case SHARED_EXECUTABLE:
+      node->frame = load_file_offset_mapping_page(node->page_common.body.shared_executable);
+      break;
+    case FILE_BACKED:
+      PANIC("NOT_IMPL");
+      break;
+    case FILE_BACKED_EXECUTABLE:
+      node->frame = load_file_page_frame(node->page_common.body.file_backed);
+      break;
+    case FREESTANDING:
+      PANIC("NOT_IMPL");
+      break;
+    default:
+      NOT_REACHED();
+  }
+
+  add_frame_vm_page(node->frame, node, &node->page_common);
+
+  // TODO set page table
+
+  lock_release (node->process_lock);
+}
+
 static void vm_node_print (struct hash_elem *e, void *_ UNUSED) {
   struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
 
-  printf("(mapped=%d, page_nr=%x body=", node->is_mapped, node->page_vaddr);
+  printf("(mapped=%d, page_nr=%x body=", node->frame != NULL, node->page_vaddr);
   print_page_common(&node->page_common);
   printf(")\n");
 }
@@ -440,6 +474,7 @@ void print_process_vm(struct process_node* process) {
 
 
 static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
+
   struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
 
   switch (node->page_common.type) {
@@ -449,8 +484,10 @@ static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
     case FILE_BACKED:
       PANIC("NOT_IMPL");
       break;
-    case SHARED_FILE_BACKED:
+    case FILE_BACKED_EXECUTABLE:
       destroy_file_page_node(node->page_common.body.file_backed);
+      if (node->frame != NULL)
+        destroy_frame(node->frame);
       break;
     case FREESTANDING:
       PANIC("NOT_IMPL");
@@ -459,7 +496,7 @@ static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
       NOT_REACHED();
   }
 
-
+  free (node);
 }
 
 static void destroy_vm_page_table(struct process_node* process) {
