@@ -419,7 +419,7 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
   return node;
 }
 
-void activate_vm_page(struct vm_node* node) {
+void* activate_vm_page(struct vm_node* node) {
   ASSERT (node != NULL);
   ASSERT (node->frame == NULL);
 
@@ -443,10 +443,13 @@ void activate_vm_page(struct vm_node* node) {
   }
 
   add_frame_vm_page(node->frame, node, &node->page_common);
+  void* paddr = get_frame_phys_addr(node->frame);
 
   // TODO set page table
 
   lock_release (node->process_lock);
+
+  return paddr;
 }
 
 static void vm_node_print (struct hash_elem *e, void *_ UNUSED) {
@@ -477,6 +480,9 @@ static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
 
   struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
 
+  if (node->frame != NULL)
+    destroy_frame(node->frame);
+
   switch (node->page_common.type) {
     case SHARED_EXECUTABLE:
       destroy_active_file(node->page_common.body.shared_executable);
@@ -486,8 +492,6 @@ static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
       break;
     case FILE_BACKED_EXECUTABLE:
       destroy_file_page_node(node->page_common.body.file_backed);
-      if (node->frame != NULL)
-        destroy_frame(node->frame);
       break;
     case FREESTANDING:
       PANIC("NOT_IMPL");
@@ -501,4 +505,22 @@ static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
 
 static void destroy_vm_page_table(struct process_node* process) {
   hash_destroy (&process->vm_table, destroy_vm_page);
+}
+
+void deactivate_vm_node_list(struct list* list) {
+  
+
+  for (struct list_elem *e = list_begin (list); e != list_end (list); e = list_remove (e)) {
+    struct vm_node* node = list_entry(e, struct vm_node, list_elem);
+
+    const bool lockable = ! lock_held_by_current_thread(node->process_lock);
+    if (lockable) 
+      lock_acquire (node->process_lock);
+
+    node->frame = NULL;
+
+    if (lockable)
+      lock_release (node->process_lock);
+  }
+
 }

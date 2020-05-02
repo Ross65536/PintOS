@@ -114,11 +114,13 @@ void destroy_active_file (struct file_offset_mapping *node) {
 
   if (node->process_ref_count == 0) {
     ASSERT (hash_delete (&active_list.active_files, &node->elem) != NULL);
+    lock_release (&active_list.monitor);
     destroy_file_page_node(node->file_page);
     if (node->frame != NULL) {
       destroy_frame(node->frame);
     }
     free (node);
+    return;
   }
 
   lock_release (&active_list.monitor);
@@ -136,6 +138,14 @@ struct frame_node* load_file_offset_mapping_page (struct file_offset_mapping *no
   lock_release (&active_list.monitor);
 
   return frame;
+}
+
+void unload_file_offset_mapping_frame (struct file_offset_mapping *node) {
+  ASSERT (node != NULL);
+
+  lock_acquire (&active_list.monitor); // TODO maybe remove lock?
+  node->frame = NULL;
+  lock_release (&active_list.monitor);
 }
 
 void print_file_offset_mapping (struct file_offset_mapping *node) {

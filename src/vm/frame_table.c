@@ -88,16 +88,24 @@ void add_frame_vm_page(struct frame_node* node, struct vm_node* page, struct pag
 
 void destroy_frame(struct frame_node* node) {
   ASSERT (node != NULL);
-
+  
   lock_acquire (&frame_table.monitor);
+
   list_remove (&node->list_elem);
 
   lock_acquire(&node->lock);
   lock_release (&frame_table.monitor);
 
-  palloc_free_page(node->phys_addr);
+
+  ASSERT (!list_empty (&node->vm_nodes));
+  deactivate_vm_node_list(&node->vm_nodes);
+  if (node->page_common.type == SHARED_EXECUTABLE) {
+    unload_file_offset_mapping_frame(node->page_common.body.shared_executable);
+  }
+
   // TODO implement writeback, etc
 
+  palloc_free_page(node->phys_addr);
   lock_release(&node->lock);
 
   free(node);
@@ -120,4 +128,14 @@ void print_frame_table(void) {
   printf("---\n");
 
   lock_release (&frame_table.monitor);
+}
+
+void* get_frame_phys_addr(struct frame_node* node) {
+  ASSERT (node != NULL);
+
+  lock_acquire(&node->lock);
+  void* addr = node->phys_addr;
+  lock_release(&node->lock);
+
+  return addr;
 }
