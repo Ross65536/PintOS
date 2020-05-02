@@ -19,6 +19,8 @@
 struct lock filesys_monitor;
 
 struct process_node {
+  struct lock lock;
+
   struct hash_elem elem;
   char name[PROCESS_MAX_NAME];
   tid_t parent_pid;
@@ -40,7 +42,7 @@ struct process_node {
 
 static struct processes {
   struct hash processes;
-  struct lock monitor_lock;
+  struct lock lock;
 } processes;
 
 static unsigned int processes_hash_func (const struct hash_elem *e, void *_ UNUSED) {
@@ -59,11 +61,12 @@ void
 process_impl_init () {
   const bool ok = hash_init (&processes.processes, processes_hash_func, processes_hash_less_func, NULL);
   ASSERT (ok);
-  lock_init (&processes.monitor_lock);
+  lock_init (&processes.lock);
   lock_init (&filesys_monitor);
 }
 
-struct process_node* find_process (pid_t pid) {
+static struct process_node* find_process_internal (pid_t pid) {
+
   struct process_node node_find;
   node_find.pid = pid;
   struct hash_elem * found = hash_find (&processes.processes, &node_find.elem); 
@@ -71,6 +74,13 @@ struct process_node* find_process (pid_t pid) {
     return NULL;
 
   return hash_entry (found, struct process_node, elem);
+}
+
+struct process_node* find_process (pid_t pid) {
+  lock_acquire (&processes.lock);
+  struct process_node* node = find_process_internal (pid);
+  lock_release (&processes.lock);
+  return node;
 }
 
 struct process_node* find_current_thread_process () {
@@ -88,20 +98,18 @@ static void remove_process (struct process_node* node) {
 static unsigned int vm_table_hash (const struct hash_elem *e, void *_ UNUSED);
 static bool vm_table_less (const struct hash_elem *l, const struct hash_elem *r, void *_ UNUSED);
 
-struct process_node* add_process (tid_t parent_tid, tid_t tid, const char* name, struct file* exec_file) {
+struct process_node* add_process (pid_t parent_tid, pid_t tid, const char* name, struct file* exec_file) {
   ASSERT (! intr_context());
 
-  lock_acquire (& processes.monitor_lock);
+  lock_acquire (& processes.lock);
 
-  if (find_process (tid) != NULL) {
+  if (find_process_internal (tid) != NULL) {
     PANIC("Process already exists");
-    lock_release (& processes.monitor_lock);
-    return NULL;
   }
 
   struct process_node* node = malloc (sizeof (struct process_node));
   if (node == NULL) {
-    lock_release (& processes.monitor_lock);
+    lock_release (& processes.lock);
     return NULL;
   }
 
@@ -114,16 +122,16 @@ struct process_node* add_process (tid_t parent_tid, tid_t tid, const char* name,
   list_init (&node->open_files);
   node->fd_counter = 2;
   node->exec_file = exec_file;
-  const bool ok = hash_init(&node->vm_table, vm_table_hash, vm_table_less, NULL);
-  if (!ok) {
+  lock_init(&node->lock);
+  if (! hash_init(&node->vm_table, vm_table_hash, vm_table_less, NULL)) {
     free (node);
-    lock_release (& processes.monitor_lock);
+    lock_release (& processes.lock);
     return NULL;
   }
 
   ASSERT (hash_insert (& processes.processes, &node->elem) == NULL);
 
-  lock_release (& processes.monitor_lock);
+  lock_release (& processes.lock);
 
   return node;
 }
@@ -153,11 +161,10 @@ static struct open_file_node* find_open_file (struct process_node * process, int
   return list_entry (found, struct open_file_node, elem);
 }
 
-int add_process_open_file (tid_t tid, struct file* file) {
-  lock_acquire (& processes.monitor_lock);
-
-  struct process_node* node = find_process (tid);
+int add_process_open_file (struct process_node* node, struct file* file) {
   ASSERT (node != NULL);
+
+  lock_acquire (& node->lock);
 
   struct open_file_node* open_file = malloc (sizeof (struct open_file_node));
   const int fd = node->fd_counter;
@@ -167,7 +174,7 @@ int add_process_open_file (tid_t tid, struct file* file) {
   
   list_push_back (&node->open_files, &open_file->elem);
 
-  lock_release (& processes.monitor_lock);
+  lock_release (& node->lock);
   return fd;
 }
 
@@ -194,43 +201,40 @@ static void close_open_files (struct process_node* node) {
   }
 }
 
-bool process_close_file (tid_t tid, int fd) {
+bool process_close_file (struct process_node* node, int fd) {
   ASSERT (fd >= 0);
-
-  lock_acquire (& processes.monitor_lock);
-
-  struct process_node* node = find_process (tid);
   ASSERT (node != NULL);
+
+  lock_acquire (& node->lock);
+
 
   struct open_file_node* file_node = find_open_file (node, fd);
   if (file_node == NULL) {
-    lock_release (& processes.monitor_lock);
+    lock_release (& node->lock);
     return false;
   }
 
   list_remove (&file_node->elem);
   close_file (file_node);
 
-  lock_release (& processes.monitor_lock);
+  lock_release (& node->lock);
   return true;
 }
 
-struct file* get_process_open_file (tid_t tid, int fd) {
+struct file* get_process_open_file (struct process_node* node, int fd) {
   ASSERT (fd >= 0);
-
-  lock_acquire (& processes.monitor_lock);
-
-  struct process_node* node = find_process (tid);
   ASSERT (node != NULL);
+
+  lock_acquire (& node->lock);
 
   struct open_file_node* file_node = find_open_file (node, fd);
   if (file_node == NULL) {
-    lock_release (& processes.monitor_lock);
+    lock_release (& node->lock);
     return NULL;
   }
   struct file* file = file_node->file;
   
-  lock_release (& processes.monitor_lock);
+  lock_release (& node->lock);
 
   return file;
 }
@@ -243,65 +247,67 @@ struct file* get_process_open_file (tid_t tid, int fd) {
  * Supposed to be called immediately before process exit.
  * Will close all open files.
  */
-void process_add_exit_code (tid_t tid, int exit_code) {
+void process_add_exit_code (struct process_node* node, int exit_code) {
   ASSERT (! intr_context());
-  
-  lock_acquire (& processes.monitor_lock);
-
-  struct process_node* node = find_process (tid);
   ASSERT (node != NULL);
+  
+  lock_acquire (& node->lock);
+
   ASSERT (! node->exited); // this must be called only once
 
   close_open_files (node);
 
   node->exited = true;
   node->exit_code = exit_code;
-  cond_signal (&node->cond_exited, &processes.monitor_lock);
+  cond_signal (&node->cond_exited, &node->lock);
 
-  lock_release (& processes.monitor_lock);
+  lock_release (& node->lock);
 }
 
-int collect_process_exit_code (tid_t tid) {
+int collect_process_exit_code (struct process_node* node) {
   ASSERT (! intr_context());
 
-  lock_acquire (&processes.monitor_lock);
+  if (node == NULL) {
+    return BAD_EXIT_CODE;
+  }
 
-  struct process_node* node = find_process (tid);
-  tid_t parent_tid = current_thread_tid ();
-  if (node == NULL || parent_tid != node->parent_pid) {
-    lock_release (&processes.monitor_lock);
+  lock_acquire (&node->lock);
+
+  const tid_t parent_tid = current_thread_tid ();
+  if (parent_tid != node->parent_pid) {
+    lock_release (&node->lock);
     return BAD_EXIT_CODE;
   }
 
   if (!node->exited) {
-    cond_wait (&node->cond_exited, &processes.monitor_lock);
-  }
+    cond_wait (&node->cond_exited, &node->lock);
+  } 
 
   const int exit_code = node->exit_code;
+  lock_acquire(&processes.lock);
+  lock_release (&node->lock);
   remove_process (node);
-  
-  lock_release (&processes.monitor_lock);
+  lock_release(&processes.lock);
 
   return exit_code;
 }
 
-void print_exit_code (tid_t tid) {
-  lock_acquire (&processes.monitor_lock);
-
-  struct process_node* node = find_process (tid);
+static void print_exit_code (struct process_node* node) {
   ASSERT (node != NULL);
+  lock_acquire (&node->lock);
+  
   ASSERT (node->exited);
   
   printf ("%s: exit(%d)\n", node->name, node->exit_code);
   
-  lock_release (&processes.monitor_lock);
+  lock_release (&node->lock);
 }
 
 void exit_curr_process(int exit_code, bool should_print_exit_code) {
-  tid_t tid = current_thread_tid ();
-  process_add_exit_code (tid, exit_code);
+  struct process_node* process = find_current_thread_process();
+  process_add_exit_code (process, exit_code);
   if (should_print_exit_code) {
-    print_exit_code (tid);
+    print_exit_code (process);
   }
 
   thread_exit ();
@@ -336,6 +342,7 @@ static bool vm_table_less (const struct hash_elem *l, const struct hash_elem *r,
 }
 
 struct list_elem* get_vm_node_list_elem(struct vm_node* node) {
+  ASSERT (node != NULL);
   return &node->list_elem;
 }
 
@@ -350,23 +357,24 @@ static struct vm_node* create_vm_node(void) {
 
 struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source) {
   ASSERT (process != NULL);
+  ASSERT (! process->exited);
   ASSERT (exec_file_source || !readonly);
   ASSERT (is_user_vaddr (vaddr));
   ASSERT (is_page_aligned (vaddr))
   ASSERT (num_zero_padding <= PGSIZE);
 
-  lock_acquire (&processes.monitor_lock);
+  lock_acquire (&process->lock);
 
   struct vm_node* node = create_vm_node();
   if (node == NULL) {
-    lock_release (&processes.monitor_lock);
+    lock_release (&process->lock);
     return NULL;
   }
 
   struct file_page_node* file_page = create_file_page_node(file_path, offset, num_zero_padding);
   if (file_page == NULL) {
     free (node);
-    lock_release (&processes.monitor_lock);
+    lock_release (&process->lock);
     return NULL;
   }
 
@@ -378,7 +386,7 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
     if (node->page_common.body.shared_executable == NULL) {
       free (node);
       destroy_file_page_node(file_page);
-      lock_release (&processes.monitor_lock);
+      lock_release (&process->lock);
       return NULL;
     }
   } else if (!readonly && exec_file_source) {
@@ -394,7 +402,7 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
 
   ASSERT (hash_insert(&process->vm_table, &node->hash_elem) == NULL);
 
-  lock_release (&processes.monitor_lock);
+  lock_release (&process->lock);
 
   return node;
 }
@@ -413,11 +421,11 @@ void print_process_vm(struct process_node* process) {
     return;
   }
 
-  lock_acquire (&processes.monitor_lock);
+  lock_acquire (&process->lock);
 
   printf ("Process (name=%s, pid=%d, len=%lu): \n", process->name, process->pid, hash_size(&process->vm_table));
   hash_apply (&process->vm_table, vm_node_print);
   printf("---\n");
 
-  lock_release (&processes.monitor_lock);
+  lock_release (&process->lock);
 }

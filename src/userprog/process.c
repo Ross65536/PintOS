@@ -157,7 +157,7 @@ process_wait (tid_t child_tid)
     return BAD_EXIT_CODE;
   }
 
-  return collect_process_exit_code(child_tid);
+  return collect_process_exit_code(find_process (child_tid));
 }
 
 /* Free the current process's resources. */
@@ -482,8 +482,8 @@ static struct file* load (struct start_process_arg *start_process_arg, void (**e
     file_close (file);
     lock_release (&filesys_monitor);
     if (process_node != NULL) {
-      process_add_exit_code(process_id, BAD_EXIT_CODE);
-      collect_process_exit_code(process_id);
+      process_add_exit_code(process_node, BAD_EXIT_CODE);
+      ASSERT (collect_process_exit_code(process_node) == BAD_EXIT_CODE);
     }
     return NULL;
   }

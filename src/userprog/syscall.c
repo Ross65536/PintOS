@@ -76,7 +76,7 @@ static int write (int fd, char* buf, size_t size) {
     return size;
   } 
 
-  struct file* file = get_process_open_file (current_thread_tid (), fd);
+  struct file* file = get_process_open_file (find_current_thread_process (), fd);
   if (file == NULL) {
     free (kbuf);
     return SYSCALL_ERROR;
@@ -111,7 +111,7 @@ static int read (int fd, char* buf, size_t size) {
     buf_size = size;
   } else {
 
-    struct file* file = get_process_open_file (current_thread_tid (), fd);
+    struct file* file = get_process_open_file (find_current_thread_process (), fd);
     if (file == NULL) {
       free (kbuf);
       return SYSCALL_ERROR;
@@ -205,9 +205,7 @@ static int open (char* file_path) {
   if (file == NULL) 
     return SYSCALL_ERROR;
 
-  const int fd = add_process_open_file (current_thread_tid (), file);
-
-  return fd;
+  return add_process_open_file (find_current_thread_process (), file);
 }
 
 static void close(int fd) {
@@ -215,7 +213,7 @@ static void close(int fd) {
     return;
   }
 
-  process_close_file (current_thread_tid (), fd);
+  process_close_file (find_current_thread_process (), fd);
 }
 
 static int filesize (int fd) {
@@ -223,7 +221,7 @@ static int filesize (int fd) {
     return SYSCALL_ERROR;
   }
 
-  struct file* file = get_process_open_file (current_thread_tid (), fd);
+  struct file* file = get_process_open_file (find_current_thread_process (), fd);
   if (file == NULL) {
     return SYSCALL_ERROR;
   }
@@ -240,7 +238,7 @@ static int tell (int fd) {
     return SYSCALL_ERROR;
   }
 
-  struct file* file = get_process_open_file (current_thread_tid (), fd);
+  struct file* file = get_process_open_file (find_current_thread_process (), fd);
   if (file == NULL) {
     return SYSCALL_ERROR;
   }
@@ -257,7 +255,7 @@ static void seek (int fd, unsigned int position) {
     return exit_curr_process (BAD_EXIT_CODE, true);
   }
 
-  struct file* file = get_process_open_file (current_thread_tid (), fd);
+  struct file* file = get_process_open_file (find_current_thread_process (), fd);
   if (file == NULL) {
     return exit_curr_process (BAD_EXIT_CODE, true);
   }
