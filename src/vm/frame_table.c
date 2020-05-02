@@ -86,7 +86,8 @@ void add_frame_vm_page(struct frame_node* node, struct vm_node* page, struct pag
   lock_release(&node->lock);
 }
 
-void destroy_frame(struct frame_node* node) {
+void destroy_frame_lockable(struct frame_node* node, bool lock_process) {
+
   ASSERT (node != NULL);
   
   lock_acquire (&frame_table.monitor);
@@ -98,7 +99,7 @@ void destroy_frame(struct frame_node* node) {
 
 
   ASSERT (!list_empty (&node->vm_nodes));
-  deactivate_vm_node_list(&node->vm_nodes);
+  deactivate_vm_node_list(&node->vm_nodes, lock_process);
   if (node->page_common.type == SHARED_EXECUTABLE) {
     unload_file_offset_mapping_frame(node->page_common.body.shared_executable);
   }
@@ -109,6 +110,10 @@ void destroy_frame(struct frame_node* node) {
   lock_release(&node->lock);
 
   free(node);
+}
+
+void destroy_frame(struct frame_node* node) {
+  destroy_frame_lockable(node, true);
 }
 
 

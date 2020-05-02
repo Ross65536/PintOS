@@ -481,7 +481,7 @@ static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
   struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
 
   if (node->frame != NULL)
-    destroy_frame(node->frame);
+    destroy_frame_lockable(node->frame, false);
 
   switch (node->page_common.type) {
     case SHARED_EXECUTABLE:
@@ -507,13 +507,12 @@ static void destroy_vm_page_table(struct process_node* process) {
   hash_destroy (&process->vm_table, destroy_vm_page);
 }
 
-void deactivate_vm_node_list(struct list* list) {
+void deactivate_vm_node_list(struct list* list, bool lockable) {
   
 
   for (struct list_elem *e = list_begin (list); e != list_end (list); e = list_remove (e)) {
     struct vm_node* node = list_entry(e, struct vm_node, list_elem);
 
-    const bool lockable = ! lock_held_by_current_thread(node->process_lock);
     if (lockable) 
       lock_acquire (node->process_lock);
 

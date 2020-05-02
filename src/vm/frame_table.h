@@ -10,6 +10,7 @@ void init_frame_table(void);
 struct frame_node* allocate_user_page(void);
 void add_frame_vm_page(struct frame_node* node, struct vm_node* page, struct page_common* common);
 void destroy_frame(struct frame_node* node);
+void destroy_frame_lockable(struct frame_node* node, bool lock_process);
 void print_frame_table(void);
 void* get_frame_phys_addr(struct frame_node* node);
 #endif

@@ -325,10 +325,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       struct vm_node* node = add_file_backed_vm(process_node, upage, file_name, offset, page_zero_bytes, !writable, true);
       if (node == NULL) {
         return false;
-      }
+      } 
       activate_vm_page(node);
-      
-        
 
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
