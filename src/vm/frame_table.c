@@ -107,12 +107,12 @@ void destroy_frame(struct frame_node* node) {
 void print_frame_table(void) {
   lock_acquire (&frame_table.monitor);
 
-  printf ("Frame-table: \n");
+  printf ("Frame-table (len=%lu): \n", list_size (&frame_table.frames));
 
   for (struct list_elem *e = list_begin (&frame_table.frames); e != list_end (&frame_table.frames); e = list_next (e)) {
     struct frame_node* node = list_entry(e, struct frame_node, list_elem);
 
-    printf ("(frame=%x, body=", (uintptr_t) node->phys_addr);
+    printf ("(frame=%x, num_pages=%lu, body=", (uintptr_t) node->phys_addr, list_size(&node->vm_nodes));
     print_page_common (&node->page_common);
     printf(")\n");
   }
