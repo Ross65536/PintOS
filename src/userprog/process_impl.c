@@ -91,7 +91,7 @@ struct process_node* find_current_thread_process () {
 
 
 static void remove_process (struct process_node* node) {
-  hash_delete (&processes.processes, &node->elem);
+  ASSERT (hash_delete (&processes.processes, &node->elem) != NULL);
   free (node);
 }
 
@@ -243,6 +243,9 @@ struct file* get_process_open_file (struct process_node* node, int fd) {
 //// exit code /////
 ////////////////////
 
+static void destroy_vm_page_table(struct process_node* process);
+
+
 /**
  * Supposed to be called immediately before process exit.
  * Will close all open files.
@@ -256,13 +259,18 @@ void process_add_exit_code (struct process_node* node, int exit_code) {
   ASSERT (! node->exited); // this must be called only once
 
   close_open_files (node);
+  destroy_vm_page_table (node);
 
   node->exited = true;
   node->exit_code = exit_code;
   cond_signal (&node->cond_exited, &node->lock);
 
   lock_release (& node->lock);
+
+  // print_active_files();
+  // print_strings_pool();
 }
+
 
 int collect_process_exit_code (struct process_node* node) {
   ASSERT (! intr_context());
@@ -428,4 +436,32 @@ void print_process_vm(struct process_node* process) {
   printf("---\n");
 
   lock_release (&process->lock);
+}
+
+
+static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
+  struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
+
+  switch (node->page_common.type) {
+    case SHARED_EXECUTABLE:
+      destroy_active_file(node->page_common.body.shared_executable);
+      break;
+    case FILE_BACKED:
+      PANIC("NOT_IMPL");
+      break;
+    case SHARED_FILE_BACKED:
+      destroy_file_page_node(node->page_common.body.file_backed);
+      break;
+    case FREESTANDING:
+      PANIC("NOT_IMPL");
+      break;
+    default:
+      NOT_REACHED();
+  }
+
+
+}
+
+static void destroy_vm_page_table(struct process_node* process) {
+  hash_destroy (&process->vm_table, destroy_vm_page);
 }

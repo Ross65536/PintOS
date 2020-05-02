@@ -108,6 +108,7 @@ void remove_string_pool(const char* string) {
 
   node->ref_count--;
   if (node->ref_count == 0) {
+    hash_delete (&pool.strings, &node->elem);
     free((void*) node->string);
     free(node);
   }

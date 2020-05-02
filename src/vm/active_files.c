@@ -101,6 +101,22 @@ struct file_offset_mapping* add_active_file(struct file_page_node* file_page) {
   return node;
 }
 
+void destroy_active_file (struct file_offset_mapping *node) {
+  ASSERT (node != NULL);
+
+  lock_acquire (&active_list.monitor);
+
+  node->process_ref_count--;
+
+  if (node->process_ref_count == 0) {
+    ASSERT (hash_delete (&active_list.active_files, &node->elem) != NULL);
+    destroy_file_page_node(node->file_page);
+    free (node);
+  }
+
+  lock_release (&active_list.monitor);
+}
+
 void print_file_offset_mapping (struct file_offset_mapping *node) {
   printf ("(");
   print_file_page_node (node->file_page);

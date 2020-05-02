@@ -321,8 +321,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       off_t offset = file_tell(file);
-      // const bool ok = add_file_backed_vm(process_node, upage, file_name, offset, page_zero_bytes, !writable, true) != NULL;
-      // ASSERT (ok);
+      const bool ok = add_file_backed_vm(process_node, upage, file_name, offset, page_zero_bytes, !writable, true) != NULL;
+      ASSERT (ok);
       // printf("read=%d, zero=%d upage=%x offset=%d| ", page_read_bytes, page_zero_bytes, upage, offset);
         
 
