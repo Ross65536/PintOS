@@ -90,7 +90,9 @@ struct file_offset_mapping* add_active_file(struct file_page_node* file_page) {
       return NULL;
     }
 
-    hash_insert (&active_list.active_files, &node->elem);
+    ASSERT (hash_insert (&active_list.active_files, &node->elem) == NULL);
+  } else {
+    destroy_file_page_node(file_page);
   }
 
   node->process_ref_count++;
@@ -99,20 +101,25 @@ struct file_offset_mapping* add_active_file(struct file_page_node* file_page) {
   return node;
 }
 
+void print_file_offset_mapping (struct file_offset_mapping *node) {
+  printf ("(");
+  print_file_page_node (node->file_page);
+  printf (", proc_ref=%d)", node->process_ref_count);
+}
+
 static void file_offset_mapping_print (struct hash_elem *e, void *_ UNUSED) {
   struct file_offset_mapping *node = hash_entry (e, struct file_offset_mapping, elem);
 
-  printf ("(");
-  print_file_page_node (node->file_page);
-  printf (", proc_ref=%d), ", node->process_ref_count);
+  print_file_offset_mapping(node);
+  printf ("\n");
 }
 
 void print_active_files () {
   lock_acquire (&active_list.monitor);
 
-  printf ("Active files: ");
+  printf ("Active files (len=%lu): \n", hash_size(&active_list.active_files));
   hash_apply (&active_list.active_files, file_offset_mapping_print);
-  printf("\n");
+  printf("---\n");
 
   lock_release (&active_list.monitor);
 }

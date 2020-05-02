@@ -24,11 +24,12 @@
 #include "vm/active_files.h"
 #include "vm/strings_pool.h"
 #include "vm/file_page.h"
+#include "process_vm.h"
 
 #define MAX_ARGS 30
 
 static thread_func start_process NO_RETURN;
-struct file* load (char* args[], size_t num_args, void (**eip) (void), void **esp) ;
+
 
 struct start_process_arg {
   char command[MAX_PROCESS_ARGS_SIZE];
@@ -40,6 +41,8 @@ struct start_process_arg {
   struct semaphore created_sema;
   bool child_failed;
 };
+
+static struct file* load (struct start_process_arg *start_process_arg, void (**eip) (void), void **esp);
 
 static void parse_executable_command (struct start_process_arg* process_args, const char* command) {
   process_args->parent_tid = current_thread_tid ();
@@ -94,9 +97,6 @@ process_execute (const char *exec_command)
     return TID_ERROR;
   }
 
-  // print_active_files();
-  // print_strings_pool();
-
   return tid;
 }
 
@@ -113,8 +113,13 @@ start_process (void *arg)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  struct file* exec_file = load (start_process_arg->args, start_process_arg->num_args, &if_.eip, &if_.esp);
 
+  struct file* exec_file = load (start_process_arg, &if_.eip, &if_.esp);
+
+  // print_active_files();
+  // print_strings_pool();
+  // print_process_vm(find_current_thread_process());
+  
   /* If load failed, quit. */
   if (exec_file == NULL) {
     start_process_arg->child_failed = true;
@@ -122,8 +127,6 @@ start_process (void *arg)
     
     thread_exit ();
   }
-
-  add_process (start_process_arg->parent_tid, current_thread_tid (), start_process_arg->args[0], exec_file);
 
   start_process_arg->child_failed = false;
   sema_up (&start_process_arg->created_sema);
@@ -301,7 +304,7 @@ install_page (void *upage, void *kpage, bool writable)
    or disk read error occurs. */
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable, const char* file_name) 
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable, const char* file_name, struct process_node* process_node) 
 {
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
@@ -317,17 +320,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      if (! writable) {
-        off_t offset = file_tell(file);
-        // printf("read=%d, zero=%d upage=%x offset=%d| ", page_read_bytes, page_zero_bytes, upage, offset);
-
-        const char* str = add_string_pool (file_name);
-        ASSERT (str != NULL);
-        struct file_page_node* file_page = create_file_page_node(str, offset, page_zero_bytes);
-        ASSERT (file_page != NULL);
-        struct file_offset_mapping* active_mapping = add_active_file(file_page);
-        ASSERT (active_mapping != NULL);
-      }
+      off_t offset = file_tell(file);
+      // const bool ok = add_file_backed_vm(process_node, upage, file_name, offset, page_zero_bytes, !writable, true) != NULL;
+      // ASSERT (ok);
+      // printf("read=%d, zero=%d upage=%x offset=%d| ", page_read_bytes, page_zero_bytes, upage, offset);
+        
 
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
@@ -361,8 +358,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns file used as executable if successful, NULL otherwise. */
-struct file* load (char* args[], size_t num_args, void (**eip) (void), void **esp) 
+static struct file* load (struct start_process_arg *start_process_arg, void (**eip) (void), void **esp) 
 {
+  char** args = start_process_arg->args;
+  size_t num_args = start_process_arg->num_args;
   const char *file_name = args[0];
 
   struct thread *t = thread_current ();
@@ -371,6 +370,7 @@ struct file* load (char* args[], size_t num_args, void (**eip) (void), void **es
   off_t file_ofs;
   bool success = false;
   int i;
+  struct process_node* process_node = NULL;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -388,6 +388,11 @@ struct file* load (char* args[], size_t num_args, void (**eip) (void), void **es
       goto done; 
     }
   file_deny_write (file);
+  pid_t process_id = current_thread_tid ();
+  process_node = add_process (start_process_arg->parent_tid, process_id, start_process_arg->args[0], file);
+  if (process_node == NULL) {
+    goto done;
+  }
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -453,7 +458,7 @@ struct file* load (char* args[], size_t num_args, void (**eip) (void), void **es
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
-                                 read_bytes, zero_bytes, writable, file_name))
+                                 read_bytes, zero_bytes, writable, file_name, process_node))
                 goto done;
             }
           else
@@ -476,6 +481,10 @@ struct file* load (char* args[], size_t num_args, void (**eip) (void), void **es
   if (! success) {
     file_close (file);
     lock_release (&filesys_monitor);
+    if (process_node != NULL) {
+      process_add_exit_code(process_id, BAD_EXIT_CODE);
+      collect_process_exit_code(process_id);
+    }
     return NULL;
   }
 

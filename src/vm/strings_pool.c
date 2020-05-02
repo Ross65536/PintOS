@@ -87,7 +87,7 @@ const char* add_string_pool(const char* string) {
       return NULL;
     }
 
-    hash_insert (&pool.strings, &node->elem);
+    ASSERT (hash_insert (&pool.strings, &node->elem) == NULL);
   }
 
   node->ref_count++;
@@ -119,15 +119,15 @@ void remove_string_pool(const char* string) {
 static void strings_pool_print (struct hash_elem *e, void *_ UNUSED) {
   struct string_node *node = hash_entry (e, struct string_node, elem);
 
-  printf("(string=%s, refs=%lu), ", node->string, node->ref_count);
+  printf("(string=%s, refs=%lu)\n", node->string, node->ref_count);
 }
 
 void print_strings_pool() {
   lock_acquire (&pool.monitor);
 
-  printf ("Strings pool: ");
+  printf ("Strings pool (len=%lu): \n", hash_size(&pool.strings));
   hash_apply (&pool.strings, strings_pool_print);
-  printf("\n");
+  printf("---\n");
 
   lock_release (&pool.monitor);
 }

@@ -22,7 +22,7 @@ typedef tid_t pid_t;
 extern struct lock filesys_monitor;
 
 void process_impl_init (void);
-void add_process (tid_t parent_tid, tid_t tid, const char* name, struct file* exec_file);
+struct process_node* add_process (tid_t parent_tid, tid_t tid, const char* name, struct file* exec_file);
 void process_add_exit_code (tid_t tid, int exit_code);
 int collect_process_exit_code (tid_t tid);
 void exit_curr_process(int exit_code, bool should_print_exit_code);
@@ -30,5 +30,11 @@ void print_exit_code (tid_t tid);
 int add_process_open_file (tid_t tid, struct file* file);
 bool process_close_file (tid_t tid, int fd);
 struct file* get_process_open_file (tid_t tid, int fd);
+
+// process_impl.c
+struct process_node;
+
+struct process_node* find_process (pid_t pid);
+struct process_node* find_current_thread_process (void);
 
 #endif /* userprog/process.h */

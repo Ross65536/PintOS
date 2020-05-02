@@ -6,6 +6,7 @@
 #include "file_page.h"
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
+#include "strings_pool.h"
 
 struct file_page_node {
   const char* file_path;
@@ -21,7 +22,8 @@ struct file_page_node* create_file_page_node(const char* file_path, off_t offset
     return NULL;
   }
 
-  node->file_path = file_path;
+  const char* copy = add_string_pool (file_path);
+  node->file_path = copy;
   node->offset = offset;
   node->num_zero_padding = num_zero_padding;
 
@@ -29,6 +31,7 @@ struct file_page_node* create_file_page_node(const char* file_path, off_t offset
 }
 
 void destroy_file_page_node(struct file_page_node* node) {
+  remove_string_pool(node->file_path);
   free (node);
 }
 

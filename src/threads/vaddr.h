@@ -86,4 +86,10 @@ vtop (const void *vaddr)
   return (uintptr_t) vaddr - (uintptr_t) PHYS_BASE;
 }
 
+static inline bool 
+is_page_aligned (const void* addr) {
+  uintptr_t val = (uintptr_t) addr;
+  return (val % PGSIZE) == 0;
+}
+
 #endif /* threads/vaddr.h */

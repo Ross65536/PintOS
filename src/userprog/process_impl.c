@@ -9,6 +9,12 @@
 #include "threads/thread.h"
 #include "threads/interrupt.h"
 #include "filesys/file.h"
+#include "process_vm.h"
+#include "vm/frame_table.h"
+#include "vm/file_page.h"
+#include "vm/active_files.h"
+#include "vm/page_common.h"
+#include "threads/vaddr.h"
 
 struct lock filesys_monitor;
 
@@ -28,15 +34,11 @@ struct process_node {
   struct list open_files;
   struct file* exec_file;
 
+  // supplemental VM table
+  struct hash vm_table;
 };
 
-struct open_file_node {
-  int fd;
-  struct file* file;
-  struct list_elem elem;
-};
-
-struct processes {
+static struct processes {
   struct hash processes;
   struct lock monitor_lock;
 } processes;
@@ -61,9 +63,9 @@ process_impl_init () {
   lock_init (&filesys_monitor);
 }
 
-static struct process_node* find_process (tid_t tid) {
+struct process_node* find_process (pid_t pid) {
   struct process_node node_find;
-  node_find.pid = tid;
+  node_find.pid = pid;
   struct hash_elem * found = hash_find (&processes.processes, &node_find.elem); 
   if (found == NULL)
     return NULL;
@@ -71,22 +73,38 @@ static struct process_node* find_process (tid_t tid) {
   return hash_entry (found, struct process_node, elem);
 }
 
+struct process_node* find_current_thread_process () {
+  pid_t process_id = current_thread_tid ();
+  return find_process(process_id);
+}
+
+
+
 static void remove_process (struct process_node* node) {
   hash_delete (&processes.processes, &node->elem);
   free (node);
 }
 
-void add_process (tid_t parent_tid, tid_t tid, const char* name, struct file* exec_file) {
+static unsigned int vm_table_hash (const struct hash_elem *e, void *_ UNUSED);
+static bool vm_table_less (const struct hash_elem *l, const struct hash_elem *r, void *_ UNUSED);
+
+struct process_node* add_process (tid_t parent_tid, tid_t tid, const char* name, struct file* exec_file) {
   ASSERT (! intr_context());
 
   lock_acquire (& processes.monitor_lock);
 
   if (find_process (tid) != NULL) {
+    PANIC("Process already exists");
     lock_release (& processes.monitor_lock);
-    return;
+    return NULL;
   }
 
   struct process_node* node = malloc (sizeof (struct process_node));
+  if (node == NULL) {
+    lock_release (& processes.monitor_lock);
+    return NULL;
+  }
+
   strlcpy (node->name, name, PROCESS_MAX_NAME);
   node->parent_pid = parent_tid;
   node->pid = tid;
@@ -96,15 +114,29 @@ void add_process (tid_t parent_tid, tid_t tid, const char* name, struct file* ex
   list_init (&node->open_files);
   node->fd_counter = 2;
   node->exec_file = exec_file;
+  const bool ok = hash_init(&node->vm_table, vm_table_hash, vm_table_less, NULL);
+  if (!ok) {
+    free (node);
+    lock_release (& processes.monitor_lock);
+    return NULL;
+  }
 
-  hash_insert (& processes.processes, &node->elem);
+  ASSERT (hash_insert (& processes.processes, &node->elem) == NULL);
 
   lock_release (& processes.monitor_lock);
+
+  return node;
 }
 
 ////////////////////
 //// files /////////
 ////////////////////
+
+struct open_file_node {
+  int fd;
+  struct file* file;
+  struct list_elem elem;
+};
 
 static bool open_file_eq (const struct list_elem *list_elem, const struct list_elem *_ UNUSED, void *aux) {
   struct open_file_node* node = list_entry (list_elem, struct open_file_node, elem);
@@ -277,3 +309,115 @@ void exit_curr_process(int exit_code, bool should_print_exit_code) {
   NOT_REACHED ();
 }
 
+////////////////////
+////     VM    /////
+////////////////////
+
+struct vm_node {
+  struct hash_elem hash_elem;
+  struct list_elem list_elem; // for frame_table
+
+  bool is_mapped;
+  uintptr_t page_vaddr;
+  struct page_common page_common;
+};
+
+
+static unsigned int vm_table_hash (const struct hash_elem *e, void *_ UNUSED) {
+  struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
+  return hash_int (node->page_vaddr);
+}
+
+static bool vm_table_less (const struct hash_elem *l, const struct hash_elem *r, void *_ UNUSED) {
+  struct vm_node *node_l = hash_entry (l, struct vm_node, hash_elem);
+  struct vm_node *node_r = hash_entry (r, struct vm_node, hash_elem);
+
+  return node_l->page_vaddr < node_r->page_vaddr;
+}
+
+struct list_elem* get_vm_node_list_elem(struct vm_node* node) {
+  return &node->list_elem;
+}
+
+static struct vm_node* create_vm_node(void) {
+  struct vm_node* node = malloc (sizeof (struct vm_node));
+  node->is_mapped = false;
+  node->page_vaddr = 0;
+  node->page_common.type = -1;
+
+  return node;
+}
+
+struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source) {
+  ASSERT (process != NULL);
+  ASSERT (exec_file_source || !readonly);
+  ASSERT (is_user_vaddr (vaddr));
+  ASSERT (is_page_aligned (vaddr))
+  ASSERT (num_zero_padding <= PGSIZE);
+
+  lock_acquire (&processes.monitor_lock);
+
+  struct vm_node* node = create_vm_node();
+  if (node == NULL) {
+    lock_release (&processes.monitor_lock);
+    return NULL;
+  }
+
+  struct file_page_node* file_page = create_file_page_node(file_path, offset, num_zero_padding);
+  if (file_page == NULL) {
+    free (node);
+    lock_release (&processes.monitor_lock);
+    return NULL;
+  }
+
+  node->page_vaddr = (uintptr_t) vaddr;
+
+  if (readonly && exec_file_source) {
+    node->page_common.type = SHARED_EXECUTABLE;
+    node->page_common.body.shared_executable = add_active_file(file_page);
+    if (node->page_common.body.shared_executable == NULL) {
+      free (node);
+      destroy_file_page_node(file_page);
+      lock_release (&processes.monitor_lock);
+      return NULL;
+    }
+  } else if (!readonly && exec_file_source) {
+    node->page_common.type = SHARED_FILE_BACKED;
+    node->page_common.body.file_backed = file_page;
+  } else if (!readonly && !exec_file_source) {
+    node->page_common.type = FILE_BACKED;
+    node->page_common.body.file_backed = file_page;
+    PANIC("NOT IMPLEMENTED");
+  } else {
+    NOT_REACHED();
+  }
+
+  ASSERT (hash_insert(&process->vm_table, &node->hash_elem) == NULL);
+
+  lock_release (&processes.monitor_lock);
+
+  return node;
+}
+
+static void vm_node_print (struct hash_elem *e, void *_ UNUSED) {
+  struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
+
+  printf("(mapped=%d, page_nr=%x body=", node->is_mapped, node->page_vaddr);
+  print_page_common(&node->page_common);
+  printf(")\n");
+}
+
+void print_process_vm(struct process_node* process) {
+  if (process == NULL) {
+    printf ("Process not found");
+    return;
+  }
+
+  lock_acquire (&processes.monitor_lock);
+
+  printf ("Process (name=%s, pid=%d, len=%lu): \n", process->name, process->pid, hash_size(&process->vm_table));
+  hash_apply (&process->vm_table, vm_node_print);
+  printf("---\n");
+
+  lock_release (&processes.monitor_lock);
+}
