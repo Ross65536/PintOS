@@ -25,6 +25,7 @@
 #include "vm/strings_pool.h"
 #include "vm/file_page.h"
 #include "process_vm.h"
+#include "process_impl.h"
 
 #define MAX_ARGS 30
 
@@ -370,7 +371,7 @@ static struct file* load (struct start_process_arg *start_process_arg, void (**e
     }
   file_deny_write (file);
   pid_t process_id = current_thread_tid ();
-  process_node = add_process (start_process_arg->parent_tid, process_id, start_process_arg->args[0], file);
+  process_node = add_process (start_process_arg->parent_tid, process_id, thread_current()->pagedir, start_process_arg->args[0], file);
   if (process_node == NULL) {
     goto done;
   }

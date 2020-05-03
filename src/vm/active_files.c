@@ -123,7 +123,7 @@ void destroy_active_file (struct file_offset_mapping *node) {
   lock_release (&active_list.monitor);
   destroy_file_page_node(node->file_page);
   if (node->frame != NULL) {
-    destroy_frame(node->frame);
+    destroy_frame_lockable(node->frame, false);
     node->frame = NULL;
   }
 

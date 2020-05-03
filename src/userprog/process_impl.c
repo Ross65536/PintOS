@@ -15,6 +15,8 @@
 #include "vm/active_files.h"
 #include "vm/page_common.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
+#include "process_impl.h"
 
 struct lock filesys_monitor;
 
@@ -25,6 +27,7 @@ struct process_node {
   char name[PROCESS_MAX_NAME];
   tid_t parent_pid;
   tid_t pid; // the process pid, same as thread tid
+  uint32_t* pagedir;
 
   // exit codes
   struct condition cond_exited;
@@ -97,8 +100,8 @@ static void remove_process (struct process_node* node) {
 
 static unsigned int vm_table_hash (const struct hash_elem *e, void *_ UNUSED);
 static bool vm_table_less (const struct hash_elem *l, const struct hash_elem *r, void *_ UNUSED);
-
-struct process_node* add_process (pid_t parent_tid, pid_t tid, const char* name, struct file* exec_file) {
+ 
+struct process_node* add_process (pid_t parent_tid, pid_t tid, uint32_t* pagedir, const char* name, struct file* exec_file) {
   ASSERT (! intr_context());
 
   lock_acquire (& processes.lock);
@@ -118,6 +121,7 @@ struct process_node* add_process (pid_t parent_tid, pid_t tid, const char* name,
   node->pid = tid;
   node->exited = false;
   node->exit_code = BAD_EXIT_CODE;
+  node->pagedir = pagedir;
   cond_init(&node->cond_exited);
   list_init (&node->open_files);
   node->fd_counter = 2;
@@ -329,7 +333,7 @@ void exit_curr_process(int exit_code, bool should_print_exit_code) {
 ////////////////////
 
 struct vm_node {
-  struct lock* process_lock; // parent process's lock
+  struct process_node* process; // parent process's lock
   struct hash_elem hash_elem;
   struct list_elem list_elem; // for frame_table
 
@@ -363,7 +367,7 @@ static struct vm_node* create_vm_node(void) {
   struct vm_node* node = malloc (sizeof (struct vm_node));
   node->page_vaddr = 0;
   node->page_common.type = -1;
-  node->process_lock = NULL;
+  node->process = NULL;
   node->frame = NULL;
 
   return node;
@@ -393,7 +397,7 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
   }
 
   node->page_vaddr = (uintptr_t) vaddr;
-  node->process_lock = &process->lock;
+  node->process = process;
 
   const bool shared_executable = readonly && exec_file_source;
   const bool file_backed_executable = !readonly && exec_file_source;
@@ -426,7 +430,7 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
 static void destroy_vm_page_node (struct vm_node *node) {
 
   ASSERT (node != NULL);
-  ASSERT (lock_held_by_current_thread(node->process_lock));
+  ASSERT (lock_held_by_current_thread(&node->process->lock));
 
   enum page_source_type type = node->page_common.type;
 
@@ -460,13 +464,28 @@ static void destroy_vm_page_node (struct vm_node *node) {
   free (node);
 }
 
-bool install_page (void *upage, void *kpage, bool writable);
+/* Adds a mapping from user virtual address UPAGE to kernel 
+   virtual address KPAGE to the page table.
+   If WRITABLE is true, the user process may modify the page;
+   otherwise, it is read-only.
+   UPAGE must not already be mapped.
+   KPAGE should probably be a page obtained from the user pool
+   with palloc_get_page().
+   Returns true on success, false if UPAGE is already mapped or
+   if memory allocation fails. */
+static bool install_page (uint32_t* pagedir, void *upage, void *kpage, bool writable)
+{
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  return (pagedir_get_page (pagedir, upage) == NULL
+          && pagedir_set_page (pagedir, upage, kpage, writable));
+}
 
 void* activate_vm_page(struct vm_node* node) {
   ASSERT (node != NULL);
   ASSERT (node->frame == NULL);
 
-  lock_acquire (node->process_lock);
+  lock_acquire (&node->process->lock);
 
   switch (node->page_common.type) {
     case SHARED_EXECUTABLE:
@@ -495,7 +514,7 @@ void* activate_vm_page(struct vm_node* node) {
 
   // failed to load
   if (node->frame == NULL) {
-    lock_release (node->process_lock);
+    lock_release (&node->process->lock);
     return NULL;
   }
 
@@ -503,14 +522,14 @@ void* activate_vm_page(struct vm_node* node) {
   void* paddr = get_frame_phys_addr(node->frame);
   void* vaddr = (void*) node->page_vaddr;
   const bool writable = ! is_page_common_readonly(&node->page_common);
-  if (! install_page(vaddr, paddr, writable)) {
-    struct lock* lock = node->process_lock;
+  if (! install_page(node->process->pagedir, vaddr, paddr, writable)) {
+    struct lock* lock = &node->process->lock;
     destroy_vm_page_node(node);
     lock_release (lock);
     return NULL;
   }
 
-  lock_release (node->process_lock);
+  lock_release (&node->process->lock);
 
   return paddr;
 }
@@ -557,13 +576,13 @@ void deactivate_vm_node_list(struct list* list, bool lockable) {
     struct vm_node* node = list_entry(e, struct vm_node, list_elem);
 
     if (lockable) 
-      lock_acquire (node->process_lock);
+      lock_acquire (&node->process->lock);
 
-    pagedir_clear_page (thread_current()->pagedir, (void*) node->page_vaddr); // unmap from pagedir
+    pagedir_clear_page (node->process->pagedir, (void*) node->page_vaddr); // unmap from pagedir
     node->frame = NULL;
 
     if (lockable)
-      lock_release (node->process_lock);
+      lock_release (&node->process->lock);
   }
 
 }
