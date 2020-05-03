@@ -11,5 +11,6 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
 void print_process_vm(struct process_node* process);
 void* activate_vm_page(struct vm_node* node);
 void deactivate_vm_node_list(struct list* list);
+struct vm_node* add_freestanding_vm(struct process_node* process, uint8_t* vaddr);
 
 #endif

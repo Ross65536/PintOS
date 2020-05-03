@@ -15,11 +15,11 @@ enum page_source_type {
 };
 
 struct swappable_page {
+  bool is_swapped;
   block_sector_t swap_number;
 };
 
 struct file_backed_executable {
-  bool file_loaded;
   struct file_page_node* file;
   struct swappable_page swap;
 };
@@ -35,6 +35,19 @@ struct page_common {
   enum page_source_type type;
   union page_body body;
 };
+
+static inline struct page_common init_freestanding(void) {
+  struct page_common ret = {
+    .type = FREESTANDING, 
+    .body = {
+      .freestanding = {
+        .swap_number = -1,
+        .is_swapped = false
+      }
+    }
+  };
+  return ret;
+}
 
 static inline bool is_page_common_readonly(struct page_common* page) {
   const enum page_source_type type = page->type;
@@ -66,10 +79,10 @@ static inline struct page_common init_file_backed_executable(struct file_page_no
     .type = FILE_BACKED_EXECUTABLE, 
     .body = {
       .file_backed_executable = {
-        .file_loaded = false,
         .file = file_page,
         .swap = {
-          .swap_number = -1
+          .swap_number = -1,
+          .is_swapped = false
         }
       }
     }

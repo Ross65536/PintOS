@@ -20,7 +20,7 @@ static const char* page_source_type_to_string(enum page_source_type type) {
 }
 
 static void print_swappable_page(struct swappable_page* swap) {
-  printf("(swap_nr=%d)", swap->swap_number);
+  printf("(swapped=%d, swap_nr=%d)", swap->is_swapped, swap->swap_number);
 }
 
 void print_page_common(struct page_common* page_common) {
@@ -33,7 +33,7 @@ void print_page_common(struct page_common* page_common) {
       print_file_offset_mapping(page_common->body.shared_executable);
       break;
     case FILE_BACKED_EXECUTABLE:
-      printf("(file_loaded=%d, swap=", page_common->body.file_backed_executable.file_loaded);
+      printf("(swap=");
       print_swappable_page(&page_common->body.file_backed_executable.swap);
       printf(", file=");
       print_file_page_node(page_common->body.file_backed_executable.file);
