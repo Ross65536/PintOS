@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "filesys/filesys.h"
 #include "filesys/off_t.h"
 #include "file_page.h"
 #include "threads/malloc.h"
@@ -55,10 +56,23 @@ int file_page_node_cmp (struct file_page_node* node_l, struct file_page_node* no
 }
 
 struct frame_node* load_file_page_frame(struct file_page_node* node) {
-  struct frame_node* frame = allocate_user_page();
 
-  // TODO implement loading from file
+  struct file *file = filesys_open (node->file_path);
+  if (file == NULL) {
+    return NULL;
+  }
+
+  file_seek(file, node->offset);
+  struct frame_node* frame = allocate_user_page();
+  void* addr = get_frame_phys_addr(frame);
+  const off_t num_read = PGSIZE - node->num_zero_padding;
+
+  if (file_read (file, addr, num_read) != num_read) {
+    destroy_frame(frame);
+    frame = NULL;
+  }
  
+  file_close(file);
   return frame;
 }
 

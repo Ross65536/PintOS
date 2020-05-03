@@ -277,8 +277,7 @@ static bool validate_segment (const struct Elf32_Phdr *, struct file *);
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
-install_page (void *upage, void *kpage, bool writable)
+bool install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
 
@@ -304,14 +303,13 @@ install_page (void *upage, void *kpage, bool writable)
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
 static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
+load_segment (struct file *file UNUSED, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable, const char* file_name, struct process_node* process_node) 
 {
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
-  file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -320,35 +318,16 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      off_t offset = file_tell(file);
-
-      struct vm_node* node = add_file_backed_vm(process_node, upage, file_name, offset, page_zero_bytes, !writable, true);
+      struct vm_node* node = add_file_backed_vm(process_node, upage, file_name, ofs, page_zero_bytes, !writable, true);
       if (node == NULL) {
         return false;
-      } 
-      activate_vm_page(node);
-
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
+      }
+      
+      if (activate_vm_page(node) == NULL) {
         return false;
+      }
 
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-
-      /* Advance. */
+      ofs += page_read_bytes;
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;

@@ -36,7 +36,10 @@ struct page_common {
   union page_body body;
 };
 
-
+static inline bool is_page_common_readonly(struct page_common* page) {
+  const enum page_source_type type = page->type;
+  return type == SHARED_EXECUTABLE;
+}
 
 static inline struct page_common init_file_backed(struct file_page_node* file_page) {
   struct page_common ret = {

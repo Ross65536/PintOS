@@ -423,51 +423,9 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
   return node;
 }
 
-void* activate_vm_page(struct vm_node* node) {
+static void destroy_vm_page_node (struct vm_node *node) {
+
   ASSERT (node != NULL);
-  ASSERT (node->frame == NULL);
-
-  lock_acquire (node->process_lock);
-
-  switch (node->page_common.type) {
-    case SHARED_EXECUTABLE:
-      node->frame = load_file_offset_mapping_page(node->page_common.body.shared_executable);
-      break;
-    case FILE_BACKED:
-      PANIC("NOT_IMPL");
-      break;
-    case FILE_BACKED_EXECUTABLE:
-      if (! node->page_common.body.file_backed_executable.file_loaded) {
-        node->frame = load_file_page_frame(node->page_common.body.file_backed);
-        node->page_common.body.file_backed_executable.file_loaded = true;
-      } else {
-        // TODO load swap
-        PANIC("NOT IMPL");
-      }
-      break;
-    case FREESTANDING:
-      PANIC("NOT_IMPL");
-      break;
-    default:
-      NOT_REACHED();
-  }
-
-  add_frame_vm_page(node->frame, node, &node->page_common);
-  void* paddr = get_frame_phys_addr(node->frame);
-
-  // TODO set page table
-
-  lock_release (node->process_lock);
-
-  return paddr;
-}
-
-static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
-
-  // lock should be hel by here
-  ASSERT (e != NULL);
-
-  struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
   ASSERT (lock_held_by_current_thread(node->process_lock));
 
   enum page_source_type type = node->page_common.type;
@@ -500,6 +458,71 @@ static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
   }
 
   free (node);
+}
+
+bool install_page (void *upage, void *kpage, bool writable);
+
+void* activate_vm_page(struct vm_node* node) {
+  ASSERT (node != NULL);
+  ASSERT (node->frame == NULL);
+
+  lock_acquire (node->process_lock);
+
+  switch (node->page_common.type) {
+    case SHARED_EXECUTABLE:
+      node->frame = load_file_offset_mapping_page(node->page_common.body.shared_executable);
+      break;
+    case FILE_BACKED:
+      PANIC("NOT_IMPL");
+      break;
+    case FILE_BACKED_EXECUTABLE:
+      if (! node->page_common.body.file_backed_executable.file_loaded) {
+        node->frame = load_file_page_frame(node->page_common.body.file_backed_executable.file);
+        if (node->frame != NULL) {
+          node->page_common.body.file_backed_executable.file_loaded = true;
+        }
+      } else {
+        // TODO load swap
+        PANIC("NOT IMPL");
+      }
+      break;
+    case FREESTANDING:
+      PANIC("NOT_IMPL");
+      break;
+    default:
+      NOT_REACHED();
+  }
+
+  // failed to load
+  if (node->frame == NULL) {
+    lock_release (node->process_lock);
+    return NULL;
+  }
+
+  add_frame_vm_page(node->frame, node, &node->page_common);
+  void* paddr = get_frame_phys_addr(node->frame);
+  void* vaddr = (void*) node->page_vaddr;
+  const bool writable = ! is_page_common_readonly(&node->page_common);
+  if (! install_page(vaddr, paddr, writable)) {
+    struct lock* lock = node->process_lock;
+    destroy_vm_page_node(node);
+    lock_release (lock);
+    return NULL;
+  }
+
+  lock_release (node->process_lock);
+
+  return paddr;
+}
+
+
+static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
+
+  // lock should be hel by here
+  ASSERT (e != NULL);
+
+  struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
+  destroy_vm_page_node(node);
 }
 
 static void vm_node_print (struct hash_elem *e, void *_ UNUSED) {
@@ -536,6 +559,7 @@ void deactivate_vm_node_list(struct list* list, bool lockable) {
     if (lockable) 
       lock_acquire (node->process_lock);
 
+    pagedir_clear_page (thread_current()->pagedir, (void*) node->page_vaddr); // unmap from pagedir
     node->frame = NULL;
 
     if (lockable)

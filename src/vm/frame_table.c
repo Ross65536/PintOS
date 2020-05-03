@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "frame_table.h"
 #include "threads/synch.h"
@@ -10,6 +11,7 @@
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "page_common.h"
+#include "threads/vaddr.h"
 
 struct frame_node {
   struct list_elem list_elem;
@@ -52,7 +54,6 @@ struct frame_node* allocate_user_page() {
     return NULL;
   }
 
-  
   void* kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   ASSERT (kpage != NULL); // TODO implement swapping
   node->phys_addr = kpage;
@@ -90,13 +91,11 @@ void destroy_frame_lockable(struct frame_node* node, bool lock_process) {
 
   ASSERT (node != NULL);
   
-  lock_acquire (&frame_table.monitor);
-
-  list_remove (&node->list_elem);
-
   lock_acquire(&node->lock);
-  lock_release (&frame_table.monitor);
 
+  lock_acquire (&frame_table.monitor);
+  list_remove (&node->list_elem);
+  lock_release (&frame_table.monitor);
 
   ASSERT (!list_empty (&node->vm_nodes));
   deactivate_vm_node_list(&node->vm_nodes, lock_process);
@@ -104,8 +103,8 @@ void destroy_frame_lockable(struct frame_node* node, bool lock_process) {
     unload_file_offset_mapping_frame(node->page_common.body.shared_executable);
   }
 
-  list_clear(&node->vm_nodes);
   // TODO implement swapping
+  list_clear(&node->vm_nodes);
 
   palloc_free_page(node->phys_addr);
   lock_release(&node->lock);
@@ -139,9 +138,9 @@ void print_frame_table(void) {
 void* get_frame_phys_addr(struct frame_node* node) {
   ASSERT (node != NULL);
 
-  lock_acquire(&node->lock);
-  void* addr = node->phys_addr;
-  lock_release(&node->lock);
+  // lock_acquire(&node->lock);
+  return node->phys_addr;
+  // lock_release(&node->lock);
 
-  return addr;
+  // return addr;
 }
