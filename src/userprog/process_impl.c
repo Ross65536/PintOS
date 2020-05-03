@@ -17,6 +17,7 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "process_impl.h"
+#include "vm/strings_pool.h"
 
 struct lock filesys_monitor;
 
@@ -24,7 +25,7 @@ struct process_node {
   struct lock lock;
 
   struct hash_elem elem;
-  char name[PROCESS_MAX_NAME];
+  const char* name;
   tid_t parent_pid;
   tid_t pid; // the process pid, same as thread tid
   uint32_t* pagedir;
@@ -95,6 +96,7 @@ struct process_node* find_current_thread_process () {
 
 static void remove_process (struct process_node* node) {
   ASSERT (hash_delete (&processes.processes, &node->elem) != NULL);
+  remove_string_pool(node->name);
   free (node);
 }
 
@@ -116,7 +118,7 @@ struct process_node* add_process (pid_t parent_tid, pid_t tid, uint32_t* pagedir
     return NULL;
   }
 
-  strlcpy (node->name, name, PROCESS_MAX_NAME);
+  node->name = add_string_pool(name);
   node->parent_pid = parent_tid;
   node->pid = tid;
   node->exited = false;
