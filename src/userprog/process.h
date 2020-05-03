@@ -21,19 +21,18 @@ typedef tid_t pid_t;
 
 extern struct lock filesys_monitor;
 
+struct process_node;
+
 void process_impl_init (void);
-struct process_node* add_process (pid_t parent_tid, pid_t pid, uint32_t* pagedir, const char* name, struct file* exec_file);
 void process_add_exit_code (struct process_node* process, int exit_code);
-int collect_process_exit_code (struct process_node* process);
 void exit_curr_process(int exit_code, bool should_print_exit_code);
 int add_process_open_file (struct process_node* process, struct file* file);
 bool process_close_file (struct process_node* process, int fd);
 struct file* get_process_open_file (struct process_node* process, int fd);
 
 // process_impl.c
-struct process_node;
 
-struct process_node* find_process (pid_t pid);
+
 struct process_node* find_current_thread_process (void);
 
 #endif /* userprog/process.h */
