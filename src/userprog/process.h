@@ -1,5 +1,5 @@
-#ifndef USERPROG_PROCESS_H
-#define USERPROG_PROCESS_H
+#ifndef ___USERPROG_PROCESS_H
+#define ___USERPROG_PROCESS_H
 
 #include "threads/thread.h"
 #include "threads/synch.h"

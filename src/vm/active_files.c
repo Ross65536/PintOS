@@ -123,7 +123,7 @@ void destroy_active_file (struct file_offset_mapping *node) {
   lock_release (&active_list.monitor);
   destroy_file_page_node(node->file_page);
   if (node->frame != NULL) {
-    destroy_frame_lockable(node->frame, false);
+    destroy_frame(node->frame);
     node->frame = NULL;
   }
 
@@ -147,10 +147,8 @@ struct frame_node* load_file_offset_mapping_page (struct file_offset_mapping *no
 
 void unload_file_offset_mapping_frame (struct file_offset_mapping *node) {
   ASSERT (node != NULL);
-
-  lock_acquire (&node->lock); 
+  ASSERT (lock_held_by_current_thread(&node->lock));
   node->frame = NULL;
-  lock_release (&node->lock);
 }
 
 void print_file_offset_mapping (struct file_offset_mapping *node) {

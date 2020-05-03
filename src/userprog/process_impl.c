@@ -427,6 +427,11 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
   return node;
 }
 
+static void unmap_vm_node(struct vm_node* node) {
+  pagedir_clear_page (node->process->pagedir, (void*) node->page_vaddr); // unmap from pagedir
+  node->frame = NULL;
+}
+
 static void destroy_vm_page_node (struct vm_node *node) {
 
   ASSERT (node != NULL);
@@ -435,7 +440,12 @@ static void destroy_vm_page_node (struct vm_node *node) {
   enum page_source_type type = node->page_common.type;
 
   if (is_mapped (node)) {
-    destroy_frame_lockable(node->frame, false);
+    struct frame_node* frame = node->frame; 
+    unmap_vm_node(node);
+    remove_frame_vm_node(frame, &node->list_elem);
+    if (type != SHARED_EXECUTABLE) {
+      destroy_frame(frame);
+    }
   } else {
     if (type == FILE_BACKED_EXECUTABLE && node->page_common.body.file_backed_executable.file_loaded) { // in swap
       PANIC("NOT IMPLEMENTED");
@@ -571,18 +581,15 @@ static void destroy_vm_page_table(struct process_node* process) {
   hash_destroy (&process->vm_table, destroy_vm_page);
 }
 
-void deactivate_vm_node_list(struct list* list, bool lockable) {
+void deactivate_vm_node_list(struct list* list) {
   for (struct list_elem *e = list_begin (list); e != list_end (list); e = list_next (e)) {
     struct vm_node* node = list_entry(e, struct vm_node, list_elem);
 
-    if (lockable) 
-      lock_acquire (&node->process->lock);
+    lock_acquire (&node->process->lock);
 
-    pagedir_clear_page (node->process->pagedir, (void*) node->page_vaddr); // unmap from pagedir
-    node->frame = NULL;
+    unmap_vm_node(node);
 
-    if (lockable)
-      lock_release (&node->process->lock);
+    lock_release (&node->process->lock);
   }
 
 }
