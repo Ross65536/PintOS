@@ -427,8 +427,6 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
   return node;
 }
 
-
-
 struct vm_node* add_freestanding_vm(struct process_node* process, uint8_t* vaddr) {
   ASSERT (process != NULL);
   ASSERT (! process->exited);
@@ -557,12 +555,14 @@ void* activate_vm_page(struct vm_node* node) {
   }
 
   add_frame_vm_page(node->frame, node, &node->page_common);
+  
   void* paddr = get_frame_phys_addr(node->frame);
   void* vaddr = (void*) node->page_vaddr;
   const bool writable = ! is_page_common_readonly(&node->page_common);
   if (! install_page(node->process->pagedir, vaddr, paddr, writable)) {
     struct lock* lock = &node->process->lock;
-    destroy_vm_page_node(node);
+    remove_frame_vm_node(node->frame, &node->list_elem);
+    destroy_frame(node->frame);
     lock_release (lock);
     return NULL;
   }

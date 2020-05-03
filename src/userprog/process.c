@@ -266,28 +266,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp, char* args[], size_t num_args);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
-
-/* Adds a mapping from user virtual address UPAGE to kernel 
-   virtual address KPAGE to the page table.
-   If WRITABLE is true, the user process may modify the page;
-   otherwise, it is read-only.
-   UPAGE must not already be mapped.
-   KPAGE should probably be a page obtained from the user pool
-   with palloc_get_page().
-   Returns true on success, false if UPAGE is already mapped or
-   if memory allocation fails. */
-static bool install_page (void *upage, void *kpage, bool writable)
-{
-  struct thread *t = thread_current ();
-
-  /* Verify that there's not already a page at that virtual
-     address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
-}
-
 
 /* Loads a segment starting at offset OFS in FILE at address
    UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
@@ -335,6 +314,76 @@ load_segment (struct file *file UNUSED, off_t ofs, uint8_t *upage,
     }
   return true;
 }
+
+static int load_stack_args (uint8_t * kpage_bottom, uint8_t* upage_bottom, char* args[], size_t num_args) {
+
+  uint8_t * kpage_top = kpage_bottom + PGSIZE;
+  uint8_t * upage_top = upage_bottom + PGSIZE;
+
+  const size_t uargs_size = num_args + 1;
+  ASSERT (uargs_size <= MAX_ARGS + 1);
+  uint8_t* u_args[uargs_size];
+  u_args[uargs_size - 1] = NULL; // c's argv[] ends in NULL
+
+  size_t offset = 0;
+
+  for (size_t i = 0; i < num_args; i++) {
+    char* arg = args[i];
+
+    const size_t arg_offset = strlen (arg) + 1; // also count \0
+    offset += arg_offset;
+
+    strlcpy ((char*) (kpage_top - offset), arg, arg_offset);
+    u_args[i] = upage_top - offset;
+  }
+
+  // align pointers for arguments
+  offset += pointer_alignment_offset(kpage_top - offset, CALL_ARG_ALIGNMENT);
+
+  const size_t argv_arr_offset = uargs_size * sizeof (uint8_t *);
+  offset += argv_arr_offset;
+  memcpy (kpage_top - offset, u_args, argv_arr_offset);
+
+  const size_t argv_offset = CALL_ARG_ALIGNMENT;
+  const uint32_t u_argv_ptr =(uint32_t) upage_top - offset;   
+  offset += argv_offset;
+  int* argv_ptr = (int*) (kpage_top - offset);
+  *argv_ptr = u_argv_ptr;
+
+  const size_t argc_offset = CALL_ARG_ALIGNMENT;
+  offset += argc_offset;
+  int* argc_ptr = (int*) (kpage_top - offset);
+  *argc_ptr = num_args;
+
+  const size_t null_ret_offset = CALL_ARG_ALIGNMENT;
+  offset += null_ret_offset;
+
+  return offset;
+}
+
+/* Create a minimal stack by mapping a zeroed page at the top of
+   user virtual memory. */
+static bool
+setup_stack (struct process_node* process, void **esp, char* args[], size_t num_args) 
+{
+  uint8_t * upage_bottom = ((uint8_t *) PHYS_BASE) - PGSIZE;
+
+  struct vm_node* vm_node = add_freestanding_vm(process, upage_bottom);
+  if (vm_node == NULL) {
+    return false;
+  }
+
+  uint8_t *kpage = (uint8_t *) activate_vm_page(vm_node);
+  if (kpage == NULL) {
+    return false;
+  }
+
+  const size_t offset = load_stack_args (kpage, upage_bottom, args, num_args);
+  *esp = PHYS_BASE - offset;
+  
+  return true;
+}
+
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
@@ -450,8 +499,9 @@ static struct file* load (struct start_process_arg *start_process_arg, void (**e
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp, args, num_args))
+  if (!setup_stack (process_node, esp, args, num_args)) {
     goto done;
+  }
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -522,71 +572,6 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
   return true;
 }
 
-static int load_stack_args (uint8_t * kpage_bottom, uint8_t* upage_bottom, char* args[], size_t num_args) {
 
-  uint8_t * kpage_top = kpage_bottom + PGSIZE;
-  uint8_t * upage_top = upage_bottom + PGSIZE;
 
-  const size_t uargs_size = num_args + 1;
-  ASSERT (uargs_size <= MAX_ARGS + 1);
-  uint8_t* u_args[uargs_size];
-  u_args[uargs_size - 1] = NULL; // c's argv[] ends in NULL
-
-  size_t offset = 0;
-
-  for (size_t i = 0; i < num_args; i++) {
-    char* arg = args[i];
-
-    const size_t arg_offset = strlen (arg) + 1; // also count \0
-    offset += arg_offset;
-
-    strlcpy ((char*) (kpage_top - offset), arg, arg_offset);
-    u_args[i] = upage_top - offset;
-  }
-
-  // align pointers for arguments
-  offset += pointer_alignment_offset(kpage_top - offset, CALL_ARG_ALIGNMENT);
-
-  const size_t argv_arr_offset = uargs_size * sizeof (uint8_t *);
-  offset += argv_arr_offset;
-  memcpy (kpage_top - offset, u_args, argv_arr_offset);
-
-  const size_t argv_offset = CALL_ARG_ALIGNMENT;
-  const uint32_t u_argv_ptr =(uint32_t) upage_top - offset;   
-  offset += argv_offset;
-  int* argv_ptr = (int*) (kpage_top - offset);
-  *argv_ptr = u_argv_ptr;
-
-  const size_t argc_offset = CALL_ARG_ALIGNMENT;
-  offset += argc_offset;
-  int* argc_ptr = (int*) (kpage_top - offset);
-  *argc_ptr = num_args;
-
-  const size_t null_ret_offset = CALL_ARG_ALIGNMENT;
-  offset += null_ret_offset;
-
-  return offset;
-}
-
-/* Create a minimal stack by mapping a zeroed page at the top of
-   user virtual memory. */
-static bool
-setup_stack (void **esp, char* args[], size_t num_args) 
-{
-  uint8_t *kpage;
-  bool success = false;
-
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      uint8_t * upage_bottom = ((uint8_t *) PHYS_BASE) - PGSIZE;
-      const size_t offset = load_stack_args (kpage, upage_bottom, args, num_args);
-      success = install_page (upage_bottom, kpage, true);
-      if (success)
-        *esp = PHYS_BASE - offset;
-      else
-        palloc_free_page (kpage);
-    }
-  return success;
-}
 
