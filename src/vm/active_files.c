@@ -154,7 +154,7 @@ void unload_file_offset_mapping_frame (struct file_offset_mapping *node) {
 }
 
 void print_file_offset_mapping (struct file_offset_mapping *node) {
-  printf ("(");
+  printf ("(file=");
   print_file_page_node (node->file_page);
   printf (", proc_ref=%d)", node->process_ref_count);
 }

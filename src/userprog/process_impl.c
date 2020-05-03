@@ -338,6 +338,9 @@ struct vm_node {
   struct page_common page_common;
 };
 
+static inline bool is_mapped(struct vm_node* node) {
+  return node->frame != NULL;
+}
 
 static unsigned int vm_table_hash (const struct hash_elem *e, void *_ UNUSED) {
   struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
@@ -392,22 +395,23 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
   node->page_vaddr = (uintptr_t) vaddr;
   node->process_lock = &process->lock;
 
-  if (readonly && exec_file_source) {
-    node->page_common.type = SHARED_EXECUTABLE;
-    node->page_common.body.shared_executable = add_active_file(file_page);
-    if (node->page_common.body.shared_executable == NULL) {
+  const bool shared_executable = readonly && exec_file_source;
+  const bool file_backed_executable = !readonly && exec_file_source;
+  const bool file_backed = !readonly && !exec_file_source;
+
+  if (shared_executable) {
+    struct file_offset_mapping* shared_executable = add_active_file(file_page);
+    if (shared_executable == NULL) {
       free (node);
       destroy_file_page_node(file_page);
       lock_release (&process->lock);
       return NULL;
     }
-  } else if (!readonly && exec_file_source) {
-    node->page_common.type = FILE_BACKED_EXECUTABLE;
-    node->page_common.body.file_backed = file_page;
-  } else if (!readonly && !exec_file_source) {
-    node->page_common.type = FILE_BACKED;
-    node->page_common.body.file_backed = file_page;
-    PANIC("NOT IMPLEMENTED");
+    node->page_common = init_shared_executable(shared_executable);
+  } else if (file_backed_executable) {
+    node->page_common = init_file_backed_executable(file_page);
+  } else if (file_backed) {
+    node->page_common = init_file_backed(file_page);
   } else {
     NOT_REACHED();
   }
@@ -433,7 +437,13 @@ void* activate_vm_page(struct vm_node* node) {
       PANIC("NOT_IMPL");
       break;
     case FILE_BACKED_EXECUTABLE:
-      node->frame = load_file_page_frame(node->page_common.body.file_backed);
+      if (! node->page_common.body.file_backed_executable.file_loaded) {
+        node->frame = load_file_page_frame(node->page_common.body.file_backed);
+        node->page_common.body.file_backed_executable.file_loaded = true;
+      } else {
+        // TODO load swap
+        PANIC("NOT IMPL");
+      }
       break;
     case FREESTANDING:
       PANIC("NOT_IMPL");
@@ -450,6 +460,46 @@ void* activate_vm_page(struct vm_node* node) {
   lock_release (node->process_lock);
 
   return paddr;
+}
+
+static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
+
+  // lock should be hel by here
+  ASSERT (e != NULL);
+
+  struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
+  ASSERT (lock_held_by_current_thread(node->process_lock));
+
+  enum page_source_type type = node->page_common.type;
+
+  if (is_mapped (node)) {
+    destroy_frame_lockable(node->frame, false);
+  } else {
+    if (type == FILE_BACKED_EXECUTABLE && node->page_common.body.file_backed_executable.file_loaded) { // in swap
+      PANIC("NOT IMPLEMENTED");
+    } else if (type == FREESTANDING) {
+      PANIC("NOT IMPLEMENTED");
+    }
+  }
+
+  switch (node->page_common.type) {
+    case SHARED_EXECUTABLE:
+      destroy_active_file(node->page_common.body.shared_executable);
+      break;
+    case FILE_BACKED:
+      PANIC("NOT_IMPL");
+      break;
+    case FILE_BACKED_EXECUTABLE:
+      destroy_file_page_node(node->page_common.body.file_backed_executable.file);
+      break;
+    case FREESTANDING:
+      PANIC("NOT_IMPL");
+      break;
+    default:
+      NOT_REACHED();
+  }
+
+  free (node);
 }
 
 static void vm_node_print (struct hash_elem *e, void *_ UNUSED) {
@@ -475,41 +525,11 @@ void print_process_vm(struct process_node* process) {
   lock_release (&process->lock);
 }
 
-
-static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
-
-  struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
-
-  if (node->frame != NULL)
-    destroy_frame_lockable(node->frame, false);
-
-  switch (node->page_common.type) {
-    case SHARED_EXECUTABLE:
-      destroy_active_file(node->page_common.body.shared_executable);
-      break;
-    case FILE_BACKED:
-      PANIC("NOT_IMPL");
-      break;
-    case FILE_BACKED_EXECUTABLE:
-      destroy_file_page_node(node->page_common.body.file_backed);
-      break;
-    case FREESTANDING:
-      PANIC("NOT_IMPL");
-      break;
-    default:
-      NOT_REACHED();
-  }
-
-  free (node);
-}
-
 static void destroy_vm_page_table(struct process_node* process) {
   hash_destroy (&process->vm_table, destroy_vm_page);
 }
 
 void deactivate_vm_node_list(struct list* list, bool lockable) {
-  
-
   for (struct list_elem *e = list_begin (list); e != list_end (list); e = list_remove (e)) {
     struct vm_node* node = list_entry(e, struct vm_node, list_elem);
 

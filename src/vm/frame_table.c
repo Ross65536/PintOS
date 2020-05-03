@@ -125,7 +125,7 @@ void print_frame_table(void) {
   for (struct list_elem *e = list_begin (&frame_table.frames); e != list_end (&frame_table.frames); e = list_next (e)) {
     struct frame_node* node = list_entry(e, struct frame_node, list_elem);
 
-    printf ("(frame=%x, num_pages=%lu, body=", (uintptr_t) node->phys_addr, list_size(&node->vm_nodes));
+    printf ("(frame=%x, vm_refs=%lu, body=", (uintptr_t) node->phys_addr, list_size(&node->vm_nodes));
     print_page_common (&node->page_common);
     printf(")\n");
   }
