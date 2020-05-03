@@ -61,7 +61,6 @@ struct frame_node* load_file_page_frame(struct file_page_node* node) {
   if (file == NULL) {
     return NULL;
   }
-  file_deny_write(file);
 
   file_seek(file, node->offset);
   struct frame_node* frame = allocate_user_page();
