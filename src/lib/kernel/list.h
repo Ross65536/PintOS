@@ -183,4 +183,9 @@ struct list_elem * list_pop_max (struct list *, list_less_func *, void *aux);
 typedef bool list_eq_func (const struct list_elem *list_elem, const struct list_elem *target, void *aux);
 struct list_elem * list_find (struct list * list, list_eq_func * eq, struct list_elem *target, void *aux);
 
+
+static inline void list_clear(struct list* list) {
+  for (struct list_elem *e = list_begin (list); e != list_end (list); e = list_remove (e));
+}
+
 #endif /* lib/kernel/list.h */

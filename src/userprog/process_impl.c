@@ -530,7 +530,7 @@ static void destroy_vm_page_table(struct process_node* process) {
 }
 
 void deactivate_vm_node_list(struct list* list, bool lockable) {
-  for (struct list_elem *e = list_begin (list); e != list_end (list); e = list_remove (e)) {
+  for (struct list_elem *e = list_begin (list); e != list_end (list); e = list_next (e)) {
     struct vm_node* node = list_entry(e, struct vm_node, list_elem);
 
     if (lockable) 

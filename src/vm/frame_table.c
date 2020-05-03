@@ -104,7 +104,8 @@ void destroy_frame_lockable(struct frame_node* node, bool lock_process) {
     unload_file_offset_mapping_frame(node->page_common.body.shared_executable);
   }
 
-  // TODO implement writeback, etc
+  list_clear(&node->vm_nodes);
+  // TODO implement swapping
 
   palloc_free_page(node->phys_addr);
   lock_release(&node->lock);
