@@ -161,10 +161,12 @@ page_fault(struct intr_frame *f)
       void* page_adr = prt_to_page(fault_addr);
       struct vm_node* node = find_vm_node(find_current_thread_process(), page_adr);
 
-      if (activate_vm_page(node) != NULL) {
+      if (node != NULL && activate_vm_page(node) != NULL) {
         return; // page activated
       }
-    } else if (f->cs == SEL_KCSEG) { // from interrupt, fail to load
+    } 
+    
+    if (f->cs == SEL_KCSEG) { // from interrupt, fail to load
       uint32_t next_inst = f->eax;
       f->eax = USERLAND_MEM_ERROR;
       f->eip = (void *)next_inst;
