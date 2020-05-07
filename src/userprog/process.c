@@ -302,10 +302,6 @@ load_segment (struct file *file UNUSED, off_t ofs, uint8_t *upage,
       if (node == NULL) {
         return false;
       }
-      
-      if (activate_vm_page(node) == NULL) {
-        return false;
-      }
 
       ofs += page_read_bytes;
       read_bytes -= page_read_bytes;

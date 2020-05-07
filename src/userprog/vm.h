@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+#include "threads/vaddr.h"
+
 #define CALL_ARG_ALIGNMENT 4
 
 #define USERLAND_MEM_ERROR ((int) -1)
@@ -13,5 +15,11 @@ uint32_t get_userland_double_word (void* ptr, bool* success);
 bool get_userland_buffer (void* src_user_buf, void* dest_buf, size_t size);
 bool get_userland_string (void* src_user_buf, char* dest_buf, size_t dest_buf_size, size_t* num_written);
 bool set_userland_buffer (void* dest_user_buf, void* src_buf, size_t size);
+
+static inline void* prt_to_page(void* ptr) {
+  uintptr_t ptr_val = (uintptr_t) ptr;
+  ptr_val &= ~PGMASK;
+  return (void*) ptr_val;
+}
 
 #endif

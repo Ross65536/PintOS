@@ -1,10 +1,12 @@
-#include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
+
+#include "userprog/exception.h"
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "process.h"
+#include "process_vm.h"
 #include "vm.h"
 #include "threads/vaddr.h"
 
@@ -146,18 +148,29 @@ page_fault(struct intr_frame *f)
   /* Count page faults. */
   page_fault_cnt++;
 
-  if (f->cs == SEL_KCSEG && is_current_thread_userland() && is_user_vaddr(fault_addr))
-  {
-    uint32_t next_inst = f->eax;
-    f->eax = USERLAND_MEM_ERROR; 
-    f->eip = (void*) next_inst;
-    return;
-  }
-
   /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
+
+  const bool is_user_thread = is_current_thread_userland();
+
+  if (is_user_thread && is_user_vaddr(fault_addr))
+  {
+    if (not_present) {
+      void* page_adr = prt_to_page(fault_addr);
+      struct vm_node* node = find_vm_node(find_current_thread_process(), page_adr);
+
+      if (activate_vm_page(node) != NULL) {
+        return; // page activated
+      }
+    } else if (f->cs == SEL_KCSEG) { // from interrupt, fail to load
+      uint32_t next_inst = f->eax;
+      f->eax = USERLAND_MEM_ERROR;
+      f->eip = (void *)next_inst;
+      return;
+    } 
+  }
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to

@@ -431,7 +431,7 @@ struct vm_node* add_freestanding_vm(struct process_node* process, uint8_t* vaddr
   ASSERT (process != NULL);
   ASSERT (! process->exited);
   ASSERT (is_user_vaddr (vaddr));
-  ASSERT (is_page_aligned (vaddr))
+  ASSERT (is_page_aligned (vaddr));
 
   lock_acquire (&process->lock);
 
@@ -620,4 +620,24 @@ void deactivate_vm_node_list(struct list* list) {
     lock_release (&node->process->lock);
   }
 
+}
+
+struct vm_node* find_vm_node(struct process_node* process, void* address) {
+  ASSERT (process != NULL);
+  ASSERT (is_page_aligned (address));
+
+  lock_acquire (&process->lock);
+
+  struct vm_node node;
+  node.page_vaddr = (uintptr_t) address;
+
+  struct hash_elem* e = hash_find(&process->vm_table, &node.hash_elem);
+
+  lock_release (&process->lock);
+
+  if (e == NULL) {
+    return NULL;
+  }
+
+  return hash_entry(e, struct vm_node, hash_elem);
 }
