@@ -52,10 +52,12 @@ static bool active_files_list_less (const struct hash_elem *l, const struct hash
   return file_page_node_cmp (node_l->file_page, node_r->file_page) < 0;
 }
  
-static struct active_files_list {
+struct active_files_list {
   struct hash active_files;
   struct lock monitor;
-} active_list;
+};
+
+struct active_files_list readonly_files;
 
 static bool init_active_files_list(struct active_files_list* active_files) {
   lock_init (&active_files->monitor);
@@ -81,33 +83,33 @@ static struct file_offset_mapping* find_file_offset_mapping(struct hash* hash, s
 ////////////
 
 void init_active_files() {
-  ASSERT (init_active_files_list(&active_list));
+  ASSERT (init_active_files_list(&readonly_files));
 }
 
-struct file_offset_mapping* add_active_file(struct file_page_node* file_page) {
+struct file_offset_mapping* add_active_file(struct active_files_list* active_list, struct file_page_node* file_page) {
 
-  lock_acquire (&active_list.monitor);
+  lock_acquire (&active_list->monitor);
 
-  struct file_offset_mapping* node = find_file_offset_mapping(&active_list.active_files, file_page);
+  struct file_offset_mapping* node = find_file_offset_mapping(&active_list->active_files, file_page);
   if (node == NULL) {
     node = create_file_offset_mapping(file_page);
     if (node == NULL) {
-      lock_release (&active_list.monitor);
+      lock_release (&active_list->monitor);
       return NULL;
     }
 
-    ASSERT (hash_insert (&active_list.active_files, &node->elem) == NULL);
+    ASSERT (hash_insert (&active_list->active_files, &node->elem) == NULL);
   } else {
     destroy_file_page_node(file_page);
   }
 
   node->process_ref_count++;
 
-  lock_release (&active_list.monitor);
+  lock_release (&active_list->monitor);
   return node;
 }
 
-void destroy_active_file (struct file_offset_mapping *node) {
+void destroy_active_file (struct active_files_list* active_list, struct file_offset_mapping *node) {
   ASSERT (node != NULL);
 
   lock_acquire (&node->lock);
@@ -118,9 +120,9 @@ void destroy_active_file (struct file_offset_mapping *node) {
     return;
   }
 
-  lock_acquire (&active_list.monitor);
-  ASSERT (hash_delete (&active_list.active_files, &node->elem) != NULL);
-  lock_release (&active_list.monitor);
+  lock_acquire (&active_list->monitor);
+  ASSERT (hash_delete (&active_list->active_files, &node->elem) != NULL);
+  lock_release (&active_list->monitor);
   destroy_file_page_node(node->file_page);
   if (node->frame != NULL) {
     destroy_frame(node->frame);
@@ -167,12 +169,12 @@ static void file_offset_mapping_print (struct hash_elem *e, void *_ UNUSED) {
   lock_release (&node->lock);
 }
 
-void print_active_files () {
-  lock_acquire (&active_list.monitor);
+void print_active_files (struct active_files_list* active_list) {
+  lock_acquire (&active_list->monitor);
 
-  printf ("Active files (len=%lu): \n", hash_size(&active_list.active_files));
-  hash_apply (&active_list.active_files, file_offset_mapping_print);
+  printf ("Active files (len=%lu): \n", hash_size(&active_list->active_files));
+  hash_apply (&active_list->active_files, file_offset_mapping_print);
   printf("---\n");
 
-  lock_release (&active_list.monitor);
+  lock_release (&active_list->monitor);
 }

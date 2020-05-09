@@ -9,8 +9,8 @@
 
 enum page_source_type {
   SHARED_EXECUTABLE,
-  FILE_BACKED_EXECUTABLE,
-  FILE_BACKED,
+  FILE_BACKED_EXECUTABLE, // can also be a readonly mmap
+  FILE_BACKED, // only writable mmaps
   FREESTANDING
 };
 

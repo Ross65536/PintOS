@@ -424,7 +424,7 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
   const bool file_backed = !readonly && !exec_file_source;
 
   if (shared_executable) {
-    struct file_offset_mapping* shared_executable = add_active_file(file_page);
+    struct file_offset_mapping* shared_executable = add_active_file(&readonly_files, file_page);
     if (shared_executable == NULL) {
       free (node);
       destroy_file_page_node(file_page);
@@ -503,7 +503,7 @@ static void destroy_vm_page_node (struct vm_node *node) {
 
   switch (node->page_common.type) {
     case SHARED_EXECUTABLE:
-      destroy_active_file(node->page_common.body.shared_executable);
+      destroy_active_file(&readonly_files, node->page_common.body.shared_executable);
       break;
     case FILE_BACKED:
       PANIC("NOT_IMPL");
@@ -639,7 +639,6 @@ void deactivate_vm_node_list(struct list* list) {
 
     lock_release (&node->process->lock);
   }
-
 }
 
 static struct vm_node* find_vm_node_internal(struct process_node* process, void* address) {
