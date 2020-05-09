@@ -9,6 +9,7 @@
 #include "threads/thread.h"
 #include "threads/interrupt.h"
 #include "filesys/file.h"
+#include "filesys/filesys.h"
 #include "process_vm.h"
 #include "vm/frame_table.h"
 #include "vm/file_page.h"
@@ -18,6 +19,7 @@
 #include "userprog/pagedir.h"
 #include "process_impl.h"
 #include "vm/strings_pool.h"
+#include "userprog/vm.h"
 
 struct lock filesys_monitor;
 
@@ -42,8 +44,11 @@ struct process_node {
 
   // supplemental VM table
   struct hash vm_table;
-
   void* syscall_stack_ptr;
+
+  // file mmap
+  int mapid_counter;
+  struct list open_mmap;
 };
 
 static struct processes {
@@ -131,6 +136,8 @@ struct process_node* add_process (pid_t parent_tid, pid_t tid, uint32_t* pagedir
   node->fd_counter = 2;
   node->exec_file = exec_file;
   node->syscall_stack_ptr = NULL;
+  list_init(&node->open_mmap);
+  node->mapid_counter = 0;
   lock_init(&node->lock);
   if (! hash_init(&node->vm_table, vm_table_hash, vm_table_less, NULL)) {
     free (node);
@@ -153,6 +160,7 @@ struct open_file_node {
   int fd;
   struct file* file;
   struct list_elem elem;
+  const char* file_path;
 };
 
 static bool open_file_eq (const struct list_elem *list_elem, const struct list_elem *_ UNUSED, void *aux) {
@@ -170,8 +178,15 @@ static struct open_file_node* find_open_file (struct process_node * process, int
   return list_entry (found, struct open_file_node, elem);
 }
 
-int add_process_open_file (struct process_node* node, struct file* file) {
+int add_process_open_file (struct process_node* node, const char* file_path) {
   ASSERT (node != NULL);
+
+  lock_acquire (&filesys_monitor);
+  struct file * file = filesys_open (file_path);
+  lock_release (&filesys_monitor);
+
+  if (file == NULL) 
+    return BAD_EXIT_CODE;
 
   lock_acquire (& node->lock);
 
@@ -180,6 +195,7 @@ int add_process_open_file (struct process_node* node, struct file* file) {
   open_file->fd = fd;
   node->fd_counter++;
   open_file->file = file;
+  open_file->file_path = add_string_pool(file_path);
   
   list_push_back (&node->open_files, &open_file->elem);
 
@@ -192,6 +208,7 @@ static void close_file (struct open_file_node* file_node) {
   file_close (file_node->file);
   lock_release (&filesys_monitor);
 
+  remove_string_pool(file_node->file_path);
   free (file_node); 
 }
 
@@ -625,24 +642,31 @@ void deactivate_vm_node_list(struct list* list) {
 
 }
 
-struct vm_node* find_vm_node(struct process_node* process, void* address) {
-  ASSERT (process != NULL);
+static struct vm_node* find_vm_node_internal(struct process_node* process, void* address) {
+  ASSERT (lock_held_by_current_thread(&process->lock));
   ASSERT (is_page_aligned (address));
-
-  lock_acquire (&process->lock);
 
   struct vm_node node;
   node.page_vaddr = (uintptr_t) address;
 
   struct hash_elem* e = hash_find(&process->vm_table, &node.hash_elem);
 
-  lock_release (&process->lock);
-
   if (e == NULL) {
     return NULL;
   }
 
   return hash_entry(e, struct vm_node, hash_elem);
+}
+
+struct vm_node* find_vm_node(struct process_node* process, void* address) {
+  ASSERT (process != NULL);
+
+  lock_acquire (&process->lock);
+
+  struct vm_node* node = find_vm_node_internal(process, address);
+  lock_release (&process->lock);
+
+  return node;
 }
 
 void add_process_user_stack_ptr(struct process_node* process, void* address) {
@@ -665,4 +689,53 @@ void* collect_process_user_stack_ptr(struct process_node* process) {
   lock_release (&process->lock);
 
   return addr;
+}
+
+
+////////////////////
+////  MMAP     /////
+////////////////////
+
+struct mmap_node {
+  int mapid;
+  struct list_elem elem;
+  struct list vm_nodes;
+  struct open_file_node* file_node;
+};
+
+int add_file_mapping(struct process_node* process, int fd, void* addr) {
+  ASSERT (process != NULL);
+  ASSERT (fd >= 2);
+  ASSERT (is_page_aligned(addr) && addr != NULL);
+
+  lock_acquire (&process->lock);
+
+  struct open_file_node* file_node = find_open_file(process, fd);
+  if (file_node == NULL) {
+    lock_release (&process->lock);
+    return MMAP_ERROR;
+  }
+
+  lock_acquire (&filesys_monitor);
+  off_t file_size = file_length(file_node->file);
+  lock_release (&filesys_monitor);
+
+  if (file_size == 0) {
+    lock_release (&process->lock);
+    return MMAP_ERROR;
+  }
+
+  for (int i = 0; i < file_size; i += PGSIZE) {
+    void* page_addr = increment_ptr(addr, i);
+
+    if (find_vm_node_internal(process, page_addr) != NULL) {
+      lock_release (&process->lock);
+      return MMAP_ERROR;
+    }
+  }
+
+
+  lock_release (&process->lock);
+
+  PANIC("NOT IMPLEMENTED");
 }

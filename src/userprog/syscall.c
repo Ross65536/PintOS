@@ -198,14 +198,7 @@ static int open (char* file_path) {
     return SYSCALL_ERROR;
   }
 
-  lock_acquire (&filesys_monitor);
-  struct file * file = filesys_open (k_path);
-  lock_release (&filesys_monitor);
-
-  if (file == NULL) 
-    return SYSCALL_ERROR;
-
-  return add_process_open_file (find_current_thread_process (), file);
+  return add_process_open_file (find_current_thread_process (), k_path);
 }
 
 static void close(int fd) {
@@ -265,6 +258,14 @@ static void seek (int fd, unsigned int position) {
   lock_release (&filesys_monitor);
 }
 
+static int mmap(int fd, void* vaddr) {
+  if (! is_page_aligned(vaddr) || vaddr == NULL) { 
+    return SYSCALL_ERROR;
+  }
+
+  return add_file_mapping (find_current_thread_process (), fd, vaddr);
+
+}
 
 static void
 syscall_handler (struct intr_frame *f) 
@@ -349,7 +350,12 @@ syscall_handler (struct intr_frame *f)
     }
 
     // lab 3 & 4
-    case SYS_MMAP:
+    case SYS_MMAP: {
+      const int fd = get_stack_int (&esp);
+      void* v_addr =  get_stack_ptr (&esp);
+      set_ret_val (f, mmap(fd, v_addr));
+      return;
+    }
     case SYS_MUNMAP:
 
     // lab 4
