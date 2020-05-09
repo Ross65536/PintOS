@@ -8,8 +8,8 @@
 #include "devices/block.h"
 
 enum page_source_type {
-  SHARED_EXECUTABLE,
-  FILE_BACKED_EXECUTABLE, // can also be a readonly mmap
+  SHARED_EXECUTABLE, // can also be a readonly mmap
+  FILE_BACKED_EXECUTABLE, 
   FILE_BACKED, // only writable mmaps
   FREESTANDING
 };
@@ -19,15 +19,15 @@ struct swappable_page {
   block_sector_t swap_number;
 };
 
-struct file_backed_executable {
+struct file_backed {
   struct file_page_node* file;
   struct swappable_page swap;
 };
 
 union page_body {
-  struct file_page_node* file_backed;
+  struct file_backed file_backed;
   struct file_offset_mapping* shared_executable;
-  struct file_backed_executable file_backed_executable;
+  struct file_backed file_backed_executable;
   struct swappable_page freestanding;
 };
 
@@ -58,7 +58,13 @@ static inline struct page_common init_file_backed(struct file_page_node* file_pa
   struct page_common ret = {
     .type = FILE_BACKED, 
     .body = {
-      .file_backed = file_page
+      .file_backed = {
+        .file = file_page,
+        .swap = {
+          .swap_number = -1,
+          .is_swapped = false
+        }
+      }
     }
   };
   return ret;

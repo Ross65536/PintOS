@@ -23,6 +23,14 @@ static void print_swappable_page(struct swappable_page* swap) {
   printf("(swapped=%d, swap_nr=%d)", swap->is_swapped, swap->swap_number);
 }
 
+static void print_file_backed(struct file_backed* file) {
+  printf("(swap=");
+  print_swappable_page(&file->swap);
+  printf(", file=");
+  print_file_page_node(file->file);
+  printf(")");
+}
+
 void print_page_common(struct page_common* page_common) {
   const char* name = page_source_type_to_string(page_common->type);
 
@@ -33,14 +41,10 @@ void print_page_common(struct page_common* page_common) {
       print_file_offset_mapping(page_common->body.shared_executable);
       break;
     case FILE_BACKED_EXECUTABLE:
-      printf("(swap=");
-      print_swappable_page(&page_common->body.file_backed_executable.swap);
-      printf(", file=");
-      print_file_page_node(page_common->body.file_backed_executable.file);
-      printf(")");
+      print_file_backed(&page_common->body.file_backed_executable);
       break;
     case FILE_BACKED:
-      print_file_page_node(page_common->body.file_backed);
+      print_file_backed(&page_common->body.file_backed);
       break;
     case FREESTANDING:
       print_swappable_page(&page_common->body.freestanding);

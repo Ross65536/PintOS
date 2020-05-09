@@ -16,5 +16,6 @@ struct frame_node* load_file_offset_mapping_page (struct file_offset_mapping *no
 void unload_file_offset_mapping_frame (struct file_offset_mapping *node);
 
 extern struct active_files_list readonly_files;
+extern struct active_files_list writable_files;
 
 #endif 

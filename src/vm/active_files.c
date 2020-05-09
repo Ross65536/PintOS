@@ -58,6 +58,7 @@ struct active_files_list {
 };
 
 struct active_files_list readonly_files;
+struct active_files_list writable_files;
 
 static bool init_active_files_list(struct active_files_list* active_files) {
   lock_init (&active_files->monitor);
@@ -84,6 +85,7 @@ static struct file_offset_mapping* find_file_offset_mapping(struct hash* hash, s
 
 void init_active_files() {
   ASSERT (init_active_files_list(&readonly_files));
+  ASSERT (init_active_files_list(&writable_files));
 }
 
 struct file_offset_mapping* add_active_file(struct active_files_list* active_list, struct file_page_node* file_page) {
