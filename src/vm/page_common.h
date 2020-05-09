@@ -8,9 +8,9 @@
 #include "devices/block.h"
 
 enum page_source_type {
-  SHARED_EXECUTABLE, // can also be a readonly mmap
-  FILE_BACKED_EXECUTABLE, 
-  FILE_BACKED, // only writable mmaps
+  SHARED_READONLY_FILE, // can also be a readonly mmap
+  FILE_BACKED_EXECUTABLE_STATIC, 
+  SHARED_WRITABLE_FILE, // only writable mmaps
   FREESTANDING
 };
 
@@ -25,9 +25,9 @@ struct file_backed {
 };
 
 union page_body {
-  struct file_backed file_backed;
-  struct file_offset_mapping* shared_executable;
-  struct file_backed file_backed_executable;
+  struct file_backed shared_writable_file;
+  struct file_offset_mapping* shared_readonly_file;
+  struct file_backed file_backed_executable_static;
   struct swappable_page freestanding;
 };
 
@@ -51,14 +51,14 @@ static inline struct page_common init_freestanding(void) {
 
 static inline bool is_page_common_readonly(struct page_common* page) {
   const enum page_source_type type = page->type;
-  return type == SHARED_EXECUTABLE;
+  return type == SHARED_READONLY_FILE;
 }
 
-static inline struct page_common init_file_backed(struct file_page_node* file_page) {
+static inline struct page_common init_shared_writable_file_backed(struct file_page_node* file_page) {
   struct page_common ret = {
-    .type = FILE_BACKED, 
+    .type = SHARED_WRITABLE_FILE, 
     .body = {
-      .file_backed = {
+      .shared_writable_file = {
         .file = file_page,
         .swap = {
           .swap_number = -1,
@@ -70,21 +70,21 @@ static inline struct page_common init_file_backed(struct file_page_node* file_pa
   return ret;
 }
 
-static inline struct page_common init_shared_executable(struct file_offset_mapping* shared_executable) {
+static inline struct page_common init_shared_readonly_file_backed(struct file_offset_mapping* shared_readonly_file) {
   struct page_common ret = {
-    .type = SHARED_EXECUTABLE, 
+    .type = SHARED_READONLY_FILE, 
     .body = {
-      .shared_executable = shared_executable
+      .shared_readonly_file = shared_readonly_file
     }
   };
   return ret;
 }
 
-static inline struct page_common init_file_backed_executable(struct file_page_node* file_page) {
+static inline struct page_common init_file_backed_executable_static(struct file_page_node* file_page) {
   struct page_common ret = {
-    .type = FILE_BACKED_EXECUTABLE, 
+    .type = FILE_BACKED_EXECUTABLE_STATIC, 
     .body = {
-      .file_backed_executable = {
+      .file_backed_executable_static = {
         .file = file_page,
         .swap = {
           .swap_number = -1,

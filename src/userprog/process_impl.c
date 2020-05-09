@@ -431,11 +431,11 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
       lock_release (&process->lock);
       return NULL;
     }
-    node->page_common = init_shared_executable(shared_executable);
+    node->page_common = init_shared_readonly_file_backed(shared_executable);
   } else if (file_backed_executable) {
-    node->page_common = init_file_backed_executable(file_page);
+    node->page_common = init_file_backed_executable_static(file_page);
   } else if (file_backed) {
-    node->page_common = init_file_backed(file_page);
+    node->page_common = init_shared_writable_file_backed(file_page);
   } else {
     NOT_REACHED();
   }
@@ -490,11 +490,11 @@ static void destroy_vm_page_node (struct vm_node *node) {
     struct frame_node* frame = node->frame; 
     unmap_vm_node(node);
     remove_frame_vm_node(frame, &node->list_elem);
-    if (type != SHARED_EXECUTABLE) {
+    if (type != SHARED_READONLY_FILE) {
       destroy_frame(frame);
     }
   } else {
-    if (type == FILE_BACKED_EXECUTABLE && node->page_common.body.file_backed_executable.swap.is_swapped) { // in swap
+    if (type == FILE_BACKED_EXECUTABLE_STATIC && node->page_common.body.file_backed_executable_static.swap.is_swapped) { // in swap
       PANIC("NOT IMPLEMENTED");
     } else if (type == FREESTANDING) {
       PANIC("NOT IMPLEMENTED");
@@ -502,14 +502,14 @@ static void destroy_vm_page_node (struct vm_node *node) {
   }
 
   switch (node->page_common.type) {
-    case SHARED_EXECUTABLE:
-      destroy_active_file(&readonly_files, node->page_common.body.shared_executable);
+    case SHARED_READONLY_FILE:
+      destroy_active_file(&readonly_files, node->page_common.body.shared_readonly_file);
       break;
-    case FILE_BACKED:
+    case SHARED_WRITABLE_FILE:
       PANIC("NOT_IMPL");
       break;
-    case FILE_BACKED_EXECUTABLE:
-      destroy_file_page_node(node->page_common.body.file_backed_executable.file);
+    case FILE_BACKED_EXECUTABLE_STATIC:
+      destroy_file_page_node(node->page_common.body.file_backed_executable_static.file);
       break;
     case FREESTANDING:
       break;
@@ -544,17 +544,17 @@ void* activate_vm_page(struct vm_node* node) {
   lock_acquire (&node->process->lock);
 
   switch (node->page_common.type) {
-    case SHARED_EXECUTABLE:
-      node->frame = load_file_offset_mapping_page(node->page_common.body.shared_executable);
+    case SHARED_READONLY_FILE:
+      node->frame = load_file_offset_mapping_page(node->page_common.body.shared_readonly_file);
       break;
-    case FILE_BACKED:
+    case SHARED_WRITABLE_FILE:
       PANIC("NOT_IMPL");
       break;
-    case FILE_BACKED_EXECUTABLE:
-      if (node->page_common.body.file_backed_executable.swap.is_swapped) {
+    case FILE_BACKED_EXECUTABLE_STATIC:
+      if (node->page_common.body.file_backed_executable_static.swap.is_swapped) {
         PANIC("NOT IMPL");
       } else {
-        node->frame = load_file_page_frame(node->page_common.body.file_backed_executable.file);
+        node->frame = load_file_page_frame(node->page_common.body.file_backed_executable_static.file);
       }
       break;
     case FREESTANDING:

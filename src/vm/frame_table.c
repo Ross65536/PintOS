@@ -75,7 +75,7 @@ void add_frame_vm_page(struct frame_node* node, struct vm_node* page, struct pag
   if (list_empty(&node->vm_nodes)) {
     node->page_common = *common;
   } else {
-    if (common->type == SHARED_EXECUTABLE) {
+    if (common->type == SHARED_READONLY_FILE) {
       ASSERT (page_common_eq(&node->page_common, common));
     } else {
       NOT_REACHED();
@@ -106,8 +106,8 @@ void destroy_frame(struct frame_node* node) {
   lock_release (&frame_table.monitor);
 
   deactivate_vm_node_list(&node->vm_nodes);
-  if (node->page_common.type == SHARED_EXECUTABLE) {
-    unload_file_offset_mapping_frame(node->page_common.body.shared_executable);
+  if (node->page_common.type == SHARED_READONLY_FILE) {
+    unload_file_offset_mapping_frame(node->page_common.body.shared_readonly_file);
   }
 
   // TODO implement swapping
