@@ -10,11 +10,7 @@
 #include "strings_pool.h"
 #include "frame_table.h"
 
-struct file_page_node {
-  const char* file_path;
-  off_t offset;
-  size_t num_zero_padding;
-};
+
 
 struct file_page_node* create_file_page_node(const char* file_path, off_t offset, size_t num_zero_padding) {
   ASSERT (num_zero_padding <= PGSIZE);
@@ -61,7 +57,7 @@ struct frame_node* load_file_page_frame(struct file_page_node* node) {
   if (file == NULL) {
     return NULL;
   }
-  
+
   lock_acquire (&filesys_monitor);
   file_seek(file, node->offset);
   lock_release (&filesys_monitor);

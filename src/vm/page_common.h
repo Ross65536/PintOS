@@ -8,9 +8,9 @@
 #include "devices/block.h"
 
 enum page_source_type {
-  SHARED_READONLY_FILE, // can also be a readonly mmap
-  FILE_BACKED_EXECUTABLE_STATIC, 
+  SHARED_READONLY_FILE, // can be executable chunk or mmap
   SHARED_WRITABLE_FILE, // only writable mmaps
+  FILE_BACKED_EXECUTABLE_STATIC, 
   FREESTANDING
 };
 
@@ -25,8 +25,8 @@ struct file_backed {
 };
 
 union page_body {
-  struct file_backed shared_writable_file;
   struct file_offset_mapping* shared_readonly_file;
+  struct file_offset_mapping* shared_writable_file;
   struct file_backed file_backed_executable_static;
   struct swappable_page freestanding;
 };
@@ -54,27 +54,21 @@ static inline bool is_page_common_readonly(struct page_common* page) {
   return type == SHARED_READONLY_FILE;
 }
 
-static inline struct page_common init_shared_writable_file_backed(struct file_page_node* file_page) {
+static inline struct page_common init_shared_writable_file_backed(struct file_offset_mapping* shared_page) {
   struct page_common ret = {
     .type = SHARED_WRITABLE_FILE, 
     .body = {
-      .shared_writable_file = {
-        .file = file_page,
-        .swap = {
-          .swap_number = -1,
-          .is_swapped = false
-        }
-      }
+      .shared_writable_file = shared_page
     }
   };
   return ret;
 }
 
-static inline struct page_common init_shared_readonly_file_backed(struct file_offset_mapping* shared_readonly_file) {
+static inline struct page_common init_shared_readonly_file_backed(struct file_offset_mapping* shared_page) {
   struct page_common ret = {
     .type = SHARED_READONLY_FILE, 
     .body = {
-      .shared_readonly_file = shared_readonly_file
+      .shared_readonly_file = shared_page
     }
   };
   return ret;

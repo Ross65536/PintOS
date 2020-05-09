@@ -5,7 +5,11 @@
 
 #include "filesys/off_t.h"
 
-struct file_page_node;
+struct file_page_node {
+  const char* file_path;
+  off_t offset;
+  size_t num_zero_padding;
+};
 
 struct file_page_node* create_file_page_node(const char* file_path, off_t offset, size_t num_zero_padding);
 void destroy_file_page_node(struct file_page_node* node);

@@ -88,6 +88,16 @@ void init_active_files() {
   ASSERT (init_active_files_list(&writable_files));
 }
 
+bool active_file_exists(struct active_files_list* active_list, struct file_page_node* file_page) {
+  lock_acquire (&active_list->monitor);
+
+  struct file_offset_mapping* node = find_file_offset_mapping(&active_list->active_files, file_page);
+
+  lock_release (&active_list->monitor);
+
+  return node != NULL;
+}
+
 struct file_offset_mapping* add_active_file(struct active_files_list* active_list, struct file_page_node* file_page) {
 
   lock_acquire (&active_list->monitor);

@@ -44,7 +44,7 @@ void print_page_common(struct page_common* page_common) {
       print_file_backed(&page_common->body.file_backed_executable_static);
       break;
     case SHARED_WRITABLE_FILE:
-      print_file_backed(&page_common->body.shared_writable_file);
+      print_file_offset_mapping(page_common->body.shared_writable_file);
       break;
     case FREESTANDING:
       print_swappable_page(&page_common->body.freestanding);

@@ -48,7 +48,7 @@ struct process_node {
 
   // file mmap
   int mapid_counter;
-  struct list open_mmap;
+  struct list file_mmaps;
 };
 
 static struct processes {
@@ -136,7 +136,7 @@ struct process_node* add_process (pid_t parent_tid, pid_t tid, uint32_t* pagedir
   node->fd_counter = 2;
   node->exec_file = exec_file;
   node->syscall_stack_ptr = NULL;
-  list_init(&node->open_mmap);
+  list_init(&node->file_mmaps);
   node->mapid_counter = 0;
   lock_init(&node->lock);
   if (! hash_init(&node->vm_table, vm_table_hash, vm_table_less, NULL)) {
@@ -359,6 +359,8 @@ struct vm_node {
   struct hash_elem hash_elem;
   struct list_elem list_elem; // for frame_table
 
+  struct list_elem mmap_list_elem; // for file mmaps
+
   struct frame_node* frame;
   uintptr_t page_vaddr;
   struct page_common page_common;
@@ -396,15 +398,13 @@ static struct vm_node* create_vm_node(void * vaddr, struct process_node* process
   return node;
 }
 
-struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source) {
+static struct vm_node* add_file_backed_vm_internal(struct process_node* process, uint8_t* vaddr, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source) {
   ASSERT (process != NULL);
   ASSERT (! process->exited);
-  ASSERT (exec_file_source || !readonly);
   ASSERT (is_user_vaddr (vaddr));
   ASSERT (is_page_aligned (vaddr))
   ASSERT (num_zero_padding <= PGSIZE);
-
-  lock_acquire (&process->lock);
+  ASSERT (lock_held_by_current_thread(&process->lock));
 
   struct vm_node* node = create_vm_node(vaddr, process);
   if (node == NULL) {
@@ -419,28 +419,41 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
     return NULL;
   }
 
-  const bool shared_executable = readonly && exec_file_source;
-  const bool file_backed_executable = !readonly && exec_file_source;
-  const bool file_backed = !readonly && !exec_file_source;
+  const bool shared_readonly_file = readonly;
+  const bool shared_writable_file = !readonly && !exec_file_source;
+  const bool file_backed_executable_static = !readonly && exec_file_source;
 
-  if (shared_executable) {
-    struct file_offset_mapping* shared_executable = add_active_file(&readonly_files, file_page);
+  if (shared_readonly_file || shared_writable_file) {
+    struct active_files_list* active_files = shared_readonly_file ? &readonly_files : &writable_files;
+    struct file_offset_mapping* shared_executable = add_active_file(active_files, file_page);
     if (shared_executable == NULL) {
       free (node);
       destroy_file_page_node(file_page);
       lock_release (&process->lock);
       return NULL;
     }
-    node->page_common = init_shared_readonly_file_backed(shared_executable);
-  } else if (file_backed_executable) {
+    node->page_common = shared_readonly_file ? 
+        init_shared_readonly_file_backed(shared_executable) :
+        init_shared_writable_file_backed(shared_executable);
+  } else if (file_backed_executable_static) {
     node->page_common = init_file_backed_executable_static(file_page);
-  } else if (file_backed) {
-    node->page_common = init_shared_writable_file_backed(file_page);
   } else {
     NOT_REACHED();
   }
-
+ 
   ASSERT (hash_insert(&process->vm_table, &node->hash_elem) == NULL);
+
+  return node;
+}
+
+struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source) {
+  ASSERT (process != NULL);
+  ASSERT (! process->exited);
+  ASSERT (! (!readonly && !exec_file_source));
+
+  lock_acquire (&process->lock);
+
+  struct vm_node* node = add_file_backed_vm_internal(process, vaddr, file_path, offset, num_zero_padding, readonly, exec_file_source);
 
   lock_release (&process->lock);
 
@@ -733,10 +746,31 @@ int add_file_mapping(struct process_node* process, int fd, void* addr) {
     }
   }
 
-  
+  struct mmap_node* map_node = malloc (sizeof (struct mmap_node));
+  map_node->mapid = process->mapid_counter;
+  process->mapid_counter++;
+  list_init(&map_node->vm_nodes);
 
+  for (off_t i = 0; i < file_size; i += PGSIZE) {
+
+    void* page_addr = increment_ptr(addr, i);
+    struct file_page_node file_page_finder = {
+      .file_path = file_node->file_path,
+      .offset = i
+    };
+
+    const bool is_last = i + PGSIZE >= file_size;
+    size_t num_zeroes = is_last ? file_size % PGSIZE: 0;
+    const bool readonly = active_file_exists(&readonly_files, &file_page_finder);
+    struct vm_node* vm_node = add_file_backed_vm_internal(process, page_addr, file_node->file_path, i, num_zeroes, readonly, readonly);
+    ASSERT (vm_node != NULL); // TODO add destruction
+
+    list_push_back(&map_node->vm_nodes, &vm_node->mmap_list_elem);
+  }
+
+  list_push_back(&process->file_mmaps, &map_node->elem);
 
   lock_release (&process->lock);
 
-  PANIC("NOT IMPLEMENTED");
+  return map_node->mapid;
 }
