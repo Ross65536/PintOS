@@ -13,7 +13,7 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "filesys/filesys.h"
-
+#include "process_vm.h"
 
 #define SYSCALL_ERROR -1
 #define MAX_FILENAME_SIZE 15
@@ -270,7 +270,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   void* esp = f->esp;
-  
+  add_process_user_stack_ptr(find_current_thread_process(), esp);
   const int syscall_num = get_stack_int (&esp);
   switch (syscall_num) {
     // lab 2

@@ -364,7 +364,7 @@ setup_stack (struct process_node* process, void **esp, char* args[], size_t num_
 {
   uint8_t * upage_bottom = ((uint8_t *) PHYS_BASE) - PGSIZE;
 
-  struct vm_node* vm_node = add_freestanding_vm(process, upage_bottom);
+  struct vm_node* vm_node = add_stack_freestanding_vm(process, upage_bottom);
   if (vm_node == NULL) {
     return false;
   }

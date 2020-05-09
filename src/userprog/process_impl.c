@@ -42,6 +42,8 @@ struct process_node {
 
   // supplemental VM table
   struct hash vm_table;
+
+  void* syscall_stack_ptr;
 };
 
 static struct processes {
@@ -128,6 +130,7 @@ struct process_node* add_process (pid_t parent_tid, pid_t tid, uint32_t* pagedir
   list_init (&node->open_files);
   node->fd_counter = 2;
   node->exec_file = exec_file;
+  node->syscall_stack_ptr = NULL;
   lock_init(&node->lock);
   if (! hash_init(&node->vm_table, vm_table_hash, vm_table_less, NULL)) {
     free (node);
@@ -427,7 +430,7 @@ struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr,
   return node;
 }
 
-struct vm_node* add_freestanding_vm(struct process_node* process, uint8_t* vaddr) {
+struct vm_node* add_stack_freestanding_vm(struct process_node* process, uint8_t* vaddr) {
   ASSERT (process != NULL);
   ASSERT (! process->exited);
   ASSERT (is_user_vaddr (vaddr));
@@ -640,4 +643,26 @@ struct vm_node* find_vm_node(struct process_node* process, void* address) {
   }
 
   return hash_entry(e, struct vm_node, hash_elem);
+}
+
+void add_process_user_stack_ptr(struct process_node* process, void* address) {
+  ASSERT (process != NULL);
+
+  lock_acquire (&process->lock);
+
+  process->syscall_stack_ptr = address;
+
+  lock_release (&process->lock);
+}
+
+void* collect_process_user_stack_ptr(struct process_node* process) {
+  ASSERT (process != NULL);
+
+  lock_acquire (&process->lock);
+  void* addr = process->syscall_stack_ptr;
+  ASSERT(addr != NULL);
+
+  lock_release (&process->lock);
+
+  return addr;
 }

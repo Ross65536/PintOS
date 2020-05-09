@@ -1,5 +1,6 @@
 #include <inttypes.h>
 #include <stdio.h>
+#include <round.h>
 
 #include "userprog/exception.h"
 #include "userprog/gdt.h"
@@ -112,6 +113,40 @@ kill(struct intr_frame *f)
   }
 }
 
+static bool activate_stack_frame(void* fault_addr) {
+  void* page_adr = prt_to_page(fault_addr);
+  struct vm_node* node = find_vm_node(find_current_thread_process(), page_adr);
+
+  if (node != NULL && activate_vm_page(node) != NULL) {
+    return true; // page activated
+  }
+
+  return false;
+}
+
+#define STACK_LEEWAY (50)
+
+static bool try_grow_stack(void* stack_ptr, void* fault_addr) {
+  // assuming fault_adr is a user ptr
+  uintptr_t curr_stack_ptr = (uintptr_t) stack_ptr;
+  uintptr_t fault_val = (uintptr_t) fault_addr;
+    
+  if (fault_val < curr_stack_ptr && curr_stack_ptr - fault_val > STACK_LEEWAY) {
+    return false;
+  }
+
+  // if fault_addr > stack_ptr then alloc page
+
+  void* page_adr = prt_to_page(fault_addr);
+  struct vm_node* node = add_stack_freestanding_vm(find_current_thread_process(), page_adr);
+  if (node != NULL && activate_vm_page(node) != NULL) {
+    return true; // page activated
+  }
+
+  return false;
+
+}
+
 /* Page fault handler.  This is a skeleton that must be filled in
    to implement virtual memory.  Some solutions to project 2 may
    also require modifying this code.
@@ -158,16 +193,25 @@ page_fault(struct intr_frame *f)
   if (is_user_thread && is_user_vaddr(fault_addr))
   {
     if (not_present) {
-      void* page_adr = prt_to_page(fault_addr);
-      struct vm_node* node = find_vm_node(find_current_thread_process(), page_adr);
-
-      if (node != NULL && activate_vm_page(node) != NULL) {
-        return; // page activated
+      if (activate_stack_frame(fault_addr)) {
+        return;
       }
-    } 
-    
-    if (f->cs == SEL_KCSEG) { // from interrupt, fail to load
-      uint32_t next_inst = f->eax;
+    }
+
+    if (user && write) {
+      if (try_grow_stack(f->esp, fault_addr)) {
+        return;
+      }
+    } else if (!user) {
+
+      if (write) {
+        void* stack_ptr = collect_process_user_stack_ptr(find_current_thread_process());
+        if (try_grow_stack(stack_ptr, fault_addr)) {
+          return;
+        }
+      }
+
+      const uint32_t next_inst = f->eax;
       f->eax = USERLAND_MEM_ERROR;
       f->eip = (void *)next_inst;
       return;
