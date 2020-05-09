@@ -61,19 +61,24 @@ struct frame_node* load_file_page_frame(struct file_page_node* node) {
   if (file == NULL) {
     return NULL;
   }
-  // file_deny_write(file);
-
+  
+  lock_acquire (&filesys_monitor);
   file_seek(file, node->offset);
+  lock_release (&filesys_monitor);
+
   struct frame_node* frame = allocate_user_page();
   void* addr = get_frame_phys_addr(frame);
   const off_t num_read = PGSIZE - node->num_zero_padding;
 
+  lock_acquire (&filesys_monitor);
   if (file_read (file, addr, num_read) != num_read) {
     destroy_frame(frame);
     frame = NULL;
   }
  
   file_close(file);
+  lock_release (&filesys_monitor);
+
   return frame;
 }
 
