@@ -264,8 +264,8 @@ static int mmap(int fd, void* vaddr) {
   }
 
   int ret = add_file_mapping (find_current_thread_process (), fd, vaddr);
-  print_process_vm (find_current_thread_process ());
-  print_process_mmaps(find_current_thread_process ());
+  // print_process_vm (find_current_thread_process ());
+  // print_process_mmaps(find_current_thread_process ());
   return ret;
 
 }

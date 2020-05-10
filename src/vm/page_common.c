@@ -64,11 +64,10 @@ bool page_common_eq(struct page_common* l, struct page_common* r) {
   switch (l->type) {
     case SHARED_READONLY_FILE:
       return l->body.shared_readonly_file == r->body.shared_readonly_file; 
-    case FILE_BACKED_EXECUTABLE_STATIC:
     case SHARED_WRITABLE_FILE:
-      PANIC("NOT_IMPLEMENTED");
+      return l->body.shared_writable_file == r->body.shared_writable_file; 
+    case FILE_BACKED_EXECUTABLE_STATIC:
     case FREESTANDING:
-      PANIC("NOT_IMPLEMENTED");
     default:
       PANIC("NOT_IMPLEMENTED");
   }
