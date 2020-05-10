@@ -15,6 +15,8 @@ struct file_page_node* create_file_page_node(const char* file_path, off_t offset
 void destroy_file_page_node(struct file_page_node* node);
 void print_file_page_node(struct file_page_node* node);
 struct frame_node* load_file_page_frame(struct file_page_node* node);
+bool writeback_file_page_frame(struct file_page_node* node, void* page_addr);
+
 
 unsigned int hash_file_page_node (struct file_page_node* node);
 int file_page_node_cmp (struct file_page_node* node_l, struct file_page_node* node_r);

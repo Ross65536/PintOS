@@ -52,8 +52,9 @@ int file_page_node_cmp (struct file_page_node* node_l, struct file_page_node* no
 }
 
 struct frame_node* load_file_page_frame(struct file_page_node* node) {
-
+  lock_acquire (&filesys_monitor);
   struct file *file = filesys_open (node->file_path);
+  lock_release (&filesys_monitor);
   if (file == NULL) {
     return NULL;
   }
@@ -76,6 +77,25 @@ struct frame_node* load_file_page_frame(struct file_page_node* node) {
   lock_release (&filesys_monitor);
 
   return frame;
+}
+
+bool writeback_file_page_frame(struct file_page_node* node, void* page_addr) {
+  lock_acquire (&filesys_monitor);
+  struct file *file = filesys_open (node->file_path);
+  lock_release (&filesys_monitor);
+
+  if (file == NULL) {
+    return false;
+  }
+
+  const off_t num_write = PGSIZE - node->num_zero_padding;
+  lock_acquire (&filesys_monitor);
+  const bool ok = file_write (file, page_addr, num_write) == num_write;
+  ASSERT (ok);
+  file_close(file);
+  lock_release (&filesys_monitor);
+
+  return ok;
 }
 
 void print_file_page_node(struct file_page_node* node) { 

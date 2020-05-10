@@ -92,6 +92,10 @@ void init_active_files() {
   ASSERT (init_active_files_list(&writable_files, "active_writable"));
 }
 
+struct file_page_node* get_file_offset_mapping_file_page(struct file_offset_mapping* mapping) {
+  return mapping->file_page;
+}
+
 bool active_file_exists(struct active_files_list* active_list, struct file_page_node* file_page) {
   lock_acquire (&active_list->monitor);
 
@@ -139,11 +143,11 @@ void destroy_active_file (struct active_files_list* active_list, struct file_off
   lock_acquire (&active_list->monitor);
   ASSERT (hash_delete (&active_list->active_files, &node->elem) != NULL);
   lock_release (&active_list->monitor);
-  destroy_file_page_node(node->file_page);
   if (node->frame != NULL) {
     destroy_frame(node->frame);
     node->frame = NULL;
   }
+  destroy_file_page_node(node->file_page);
 
   lock_release (&node->lock);
   free (node);

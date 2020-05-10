@@ -112,7 +112,8 @@ void destroy_frame(struct frame_node* node) {
   }
 
   if (node->page_common.type == SHARED_WRITABLE_FILE) {
-    // TODO implement writing back to file
+    writeback_file_page_frame(get_file_offset_mapping_file_page(node->page_common.body.shared_writable_file), node->phys_addr);
+    // check for dirty flags
   }
 
   // TODO implement swapping

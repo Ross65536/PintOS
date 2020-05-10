@@ -15,6 +15,7 @@ void print_file_offset_mapping (struct file_offset_mapping *node);
 void destroy_active_file (struct active_files_list* active_list, struct file_offset_mapping *node);
 struct frame_node* load_file_offset_mapping_page (struct file_offset_mapping *node);
 void unload_file_offset_mapping_frame (struct file_offset_mapping *node);
+struct file_page_node* get_file_offset_mapping_file_page(struct file_offset_mapping* mapping);
 
 extern struct active_files_list readonly_files;
 extern struct active_files_list writable_files;

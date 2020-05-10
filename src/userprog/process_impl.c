@@ -525,8 +525,9 @@ static void destroy_vm_page_node (struct vm_node *node) {
   switch (node->page_common.type) {
     case SHARED_READONLY_FILE:
     case SHARED_WRITABLE_FILE: {
-      struct active_files_list* active_files = node->page_common.type == SHARED_READONLY_FILE ? &readonly_files : &writable_files;
-      struct file_offset_mapping* file = node->page_common.type == SHARED_READONLY_FILE ? node->page_common.body.shared_readonly_file : node->page_common.body.shared_writable_file;
+      const bool shared_readonly = node->page_common.type == SHARED_READONLY_FILE;
+      struct active_files_list* active_files = shared_readonly ? &readonly_files : &writable_files;
+      struct file_offset_mapping* file = shared_readonly ? node->page_common.body.shared_readonly_file : node->page_common.body.shared_writable_file;
       destroy_active_file(active_files, file);
       break;
     }
