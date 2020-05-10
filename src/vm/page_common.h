@@ -36,6 +36,18 @@ struct page_common {
   union page_body body;
 };
 
+static inline bool is_page_common_shared_file(struct page_common* common) {
+  const enum page_source_type type = common->type;
+  return type == SHARED_READONLY_FILE || type == SHARED_WRITABLE_FILE;
+}
+
+static inline struct file_offset_mapping* get_page_common_shared_active_file(struct page_common* common) {
+  ASSERT (is_page_common_shared_file(common));
+
+  return common->type == SHARED_READONLY_FILE ? 
+      common->body.shared_readonly_file : common->body.shared_writable_file;
+}
+
 static inline struct page_common init_freestanding(void) {
   struct page_common ret = {
     .type = FREESTANDING, 

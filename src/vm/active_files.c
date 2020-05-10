@@ -52,16 +52,20 @@ static bool active_files_list_less (const struct hash_elem *l, const struct hash
   return file_page_node_cmp (node_l->file_page, node_r->file_page) < 0;
 }
  
+#define ACTIVE_FILE_NAME_SIZE 16
+
 struct active_files_list {
   struct hash active_files;
   struct lock monitor;
+  const char* name;
 };
 
 struct active_files_list readonly_files;
 struct active_files_list writable_files;
 
-static bool init_active_files_list(struct active_files_list* active_files) {
+static bool init_active_files_list(struct active_files_list* active_files, const char* name) {
   lock_init (&active_files->monitor);
+  active_files->name = name;
   return hash_init (&active_files->active_files, active_files_list_hash, active_files_list_less, NULL);
 }
 
@@ -84,8 +88,8 @@ static struct file_offset_mapping* find_file_offset_mapping(struct hash* hash, s
 ////////////
 
 void init_active_files() {
-  ASSERT (init_active_files_list(&readonly_files));
-  ASSERT (init_active_files_list(&writable_files));
+  ASSERT (init_active_files_list(&readonly_files, "active_readonly"));
+  ASSERT (init_active_files_list(&writable_files, "active_writable"));
 }
 
 bool active_file_exists(struct active_files_list* active_list, struct file_page_node* file_page) {
@@ -184,7 +188,7 @@ static void file_offset_mapping_print (struct hash_elem *e, void *_ UNUSED) {
 void print_active_files (struct active_files_list* active_list) {
   lock_acquire (&active_list->monitor);
 
-  printf ("Active files (len=%lu): \n", hash_size(&active_list->active_files));
+  printf ("Active files (name=%s, len=%lu): \n", active_list->name, hash_size(&active_list->active_files));
   hash_apply (&active_list->active_files, file_offset_mapping_print);
   printf("---\n");
 

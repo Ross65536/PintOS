@@ -267,6 +267,10 @@ static int mmap(int fd, void* vaddr) {
 
 }
 
+static void munmap (int mmapid) { 
+  unmap_file_mapping (find_current_thread_process (), mmapid);
+}
+
 static void
 syscall_handler (struct intr_frame *f) 
 {
@@ -356,7 +360,11 @@ syscall_handler (struct intr_frame *f)
       set_ret_val (f, mmap(fd, v_addr));
       return;
     }
-    case SYS_MUNMAP:
+    case SYS_MUNMAP: {
+      const int mmapid = get_stack_int (&esp);
+      munmap (mmapid);
+      return;
+    }
 
     // lab 4
     case SYS_CHDIR:

@@ -16,5 +16,7 @@ struct vm_node* find_vm_node(struct process_node* process, void* address);
 void add_process_user_stack_ptr(struct process_node* process, void* address);
 void* collect_process_user_stack_ptr(struct process_node* process);
 int add_file_mapping(struct process_node* process, int fd, void* addr);
+bool unmap_file_mapping(struct process_node* process, int mmapid);
 
-#endif
+
+#endif 

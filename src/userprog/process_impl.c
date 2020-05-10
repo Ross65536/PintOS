@@ -279,6 +279,9 @@ static void destroy_vm_page_table(struct process_node* process);
 void process_add_exit_code (struct process_node* node, int exit_code) {
   ASSERT (! intr_context());
   ASSERT (node != NULL);
+
+  // print_active_files(&readonly_files);
+  // print_active_files(&writable_files);
   
   lock_acquire (& node->lock);
 
@@ -293,6 +296,7 @@ void process_add_exit_code (struct process_node* node, int exit_code) {
 
   lock_release (& node->lock);
 
+  
   // print_active_files();
   // print_strings_pool();
   // print_frame_table();
@@ -503,7 +507,7 @@ static void destroy_vm_page_node (struct vm_node *node) {
     struct frame_node* frame = node->frame; 
     unmap_vm_node(node);
     remove_frame_vm_node(frame, &node->list_elem);
-    if (type != SHARED_READONLY_FILE) {
+    if (! is_page_common_shared_file(&node->page_common)) {
       destroy_frame(frame);
     }
   } else {
@@ -516,11 +520,12 @@ static void destroy_vm_page_node (struct vm_node *node) {
 
   switch (node->page_common.type) {
     case SHARED_READONLY_FILE:
-      destroy_active_file(&readonly_files, node->page_common.body.shared_readonly_file);
+    case SHARED_WRITABLE_FILE: {
+      struct active_files_list* active_files = node->page_common.type == SHARED_READONLY_FILE ? &readonly_files : &writable_files;
+      struct file_offset_mapping* file = node->page_common.type == SHARED_READONLY_FILE ? node->page_common.body.shared_readonly_file : node->page_common.body.shared_writable_file;
+      destroy_active_file(active_files, file);
       break;
-    case SHARED_WRITABLE_FILE:
-      PANIC("NOT_IMPL");
-      break;
+    }
     case FILE_BACKED_EXECUTABLE_STATIC:
       destroy_file_page_node(node->page_common.body.file_backed_executable_static.file);
       break;
@@ -558,10 +563,8 @@ void* activate_vm_page(struct vm_node* node) {
 
   switch (node->page_common.type) {
     case SHARED_READONLY_FILE:
-      node->frame = load_file_offset_mapping_page(node->page_common.body.shared_readonly_file);
-      break;
     case SHARED_WRITABLE_FILE:
-      PANIC("NOT_IMPL");
+      node->frame = load_file_offset_mapping_page(get_page_common_shared_active_file(&node->page_common));
       break;
     case FILE_BACKED_EXECUTABLE_STATIC:
       if (node->page_common.body.file_backed_executable_static.swap.is_swapped) {
@@ -773,4 +776,46 @@ int add_file_mapping(struct process_node* process, int fd, void* addr) {
   lock_release (&process->lock);
 
   return map_node->mapid;
+}
+
+
+static bool mmap_node_eq (const struct list_elem *list_elem, const struct list_elem *_ UNUSED, void *aux) {
+  struct mmap_node* node = list_entry (list_elem, struct mmap_node, elem);
+  int target = *((int *) aux);
+
+  return node->mapid == target;
+}
+
+
+static struct mmap_node* find_mmap_node(struct process_node* process, int mmapid) {
+  ASSERT (lock_held_by_current_thread(&process->lock));
+
+  struct list_elem * found = list_find (&process->file_mmaps, mmap_node_eq, NULL, &mmapid); 
+  if (found == NULL)
+    return NULL;
+
+  return list_entry (found, struct mmap_node, elem);
+}
+
+bool unmap_file_mapping(struct process_node* process, int mmapid) {
+  ASSERT (process != NULL);
+
+  lock_acquire (&process->lock);
+
+  struct mmap_node* mmap_node = find_mmap_node (process, mmapid);
+  if (mmap_node == NULL) {
+    lock_release (&process->lock);
+    return false;  
+  }
+
+  for (struct list_elem *e = list_begin (&mmap_node->vm_nodes); e != list_end (&mmap_node->vm_nodes); e = list_remove (e)) {
+    struct vm_node* vm = list_entry (e, struct vm_node, mmap_list_elem);
+    destroy_vm_page_node(vm);
+  }
+
+  free (mmap_node);
+
+  lock_release (&process->lock);
+
+  return true;
 }
