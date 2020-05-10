@@ -774,7 +774,7 @@ int add_file_mapping(struct process_node* process, int fd, void* addr) {
     };
 
     const bool is_last = i + PGSIZE >= file_size;
-    size_t num_zeroes = is_last ? file_size % PGSIZE: 0;
+    size_t num_zeroes = is_last ? PGSIZE - file_size : 0;
     const bool readonly = active_file_exists(&readonly_files, &file_page_finder);
     struct vm_node* vm_node = add_file_backed_vm_internal(process, page_addr, file_node->file_path, i, num_zeroes, readonly, readonly);
     ASSERT (vm_node != NULL); // TODO add destruction
