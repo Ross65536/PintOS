@@ -163,6 +163,10 @@ struct open_file_node {
   const char* file_path;
 };
 
+static void print_open_file_node(struct open_file_node* file) {
+  printf("(fd=%d, path=%s", file->fd, file->file_path);
+}
+
 static bool open_file_eq (const struct list_elem *list_elem, const struct list_elem *_ UNUSED, void *aux) {
   struct open_file_node* node = list_entry (list_elem, struct open_file_node, elem);
   int target = *((int *) aux);
@@ -270,7 +274,7 @@ struct file* get_process_open_file (struct process_node* node, int fd) {
 ////////////////////
 
 static void destroy_vm_page_table(struct process_node* process);
-
+void destroy_mmaps(struct process_node* process);
 
 /**
  * Supposed to be called immediately before process exit.
@@ -287,6 +291,7 @@ void process_add_exit_code (struct process_node* node, int exit_code) {
 
   ASSERT (! node->exited); // this must be called only once
 
+  destroy_mmaps(node);
   close_open_files (node);
   destroy_vm_page_table (node);
 
@@ -360,9 +365,8 @@ void exit_curr_process(int exit_code, bool should_print_exit_code) {
 
 struct vm_node {
   struct process_node* process; // parent process's lock
-  struct hash_elem hash_elem;
+  struct hash_elem hash_elem; // for process vm table
   struct list_elem list_elem; // for frame_table
-
   struct list_elem mmap_list_elem; // for file mmaps
 
   struct frame_node* frame;
@@ -556,6 +560,8 @@ static bool install_page (uint32_t* pagedir, void *upage, void *kpage, bool writ
 }
 
 void* activate_vm_page(struct vm_node* node) {
+
+  // print_process_vm(node->process);
   ASSERT (node != NULL);
   ASSERT (! is_mapped(node));
 
@@ -618,11 +624,17 @@ static void destroy_vm_page (struct hash_elem *e, void *_ UNUSED) {
   destroy_vm_page_node(node);
 }
 
-static void vm_node_print (struct hash_elem *e, void *_ UNUSED) {
-  struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
+static void print_vm_node (struct vm_node *node) {
+  ASSERT (lock_held_by_current_thread(&node->process->lock));
 
   printf("(mapped=%d, page_nr=%x body=", node->frame != NULL, node->page_vaddr);
   print_page_common(&node->page_common);
+}
+
+static void vm_node_print (struct hash_elem *e, void *_ UNUSED) {
+  struct vm_node *node = hash_entry (e, struct vm_node, hash_elem);
+
+  print_vm_node (node);
   printf(")\n");
 }
 
@@ -634,7 +646,7 @@ void print_process_vm(struct process_node* process) {
 
   lock_acquire (&process->lock);
 
-  printf ("Process (name=%s, pid=%d, len=%lu): \n", process->name, process->pid, hash_size(&process->vm_table));
+  printf ("Process VM (name=%s, pid=%d, len=%lu): \n", process->name, process->pid, hash_size(&process->vm_table));
   hash_apply (&process->vm_table, vm_node_print);
   printf("---\n");
 
@@ -715,7 +727,6 @@ struct mmap_node {
   int mapid;
   struct list_elem elem;
   struct list vm_nodes;
-  struct open_file_node* file_node;
 };
 
 int add_file_mapping(struct process_node* process, int fd, void* addr) {
@@ -797,6 +808,18 @@ static struct mmap_node* find_mmap_node(struct process_node* process, int mmapid
   return list_entry (found, struct mmap_node, elem);
 }
 
+static void destroy_mmap_node (struct process_node* process, struct mmap_node* mmap_node) {
+  for (struct list_elem *e = list_begin (&mmap_node->vm_nodes); e != list_end (&mmap_node->vm_nodes);) {
+    struct vm_node* vm = list_entry (e, struct vm_node, mmap_list_elem);
+    e = list_remove (e);
+    hash_delete(&process->vm_table, &vm->hash_elem);
+    destroy_vm_page_node(vm);
+  } 
+
+  free (mmap_node);
+}
+
+
 bool unmap_file_mapping(struct process_node* process, int mmapid) {
   ASSERT (process != NULL);
 
@@ -808,14 +831,45 @@ bool unmap_file_mapping(struct process_node* process, int mmapid) {
     return false;  
   }
 
-  for (struct list_elem *e = list_begin (&mmap_node->vm_nodes); e != list_end (&mmap_node->vm_nodes); e = list_remove (e)) {
-    struct vm_node* vm = list_entry (e, struct vm_node, mmap_list_elem);
-    destroy_vm_page_node(vm);
-  }
-
-  free (mmap_node);
+  list_remove(&mmap_node->elem);
+  destroy_mmap_node(process, mmap_node);
 
   lock_release (&process->lock);
 
   return true;
+}
+
+void destroy_mmaps(struct process_node* process) {
+  ASSERT (lock_held_by_current_thread(&process->lock));
+
+  for (struct list_elem *e = list_begin (&process->file_mmaps); e != list_end (&process->file_mmaps); ) {
+    struct mmap_node* mmap = list_entry (e, struct mmap_node, elem);
+    e = list_remove (e);
+    destroy_mmap_node(process, mmap);
+  }
+
+}
+
+void print_process_mmaps(struct process_node* process) {
+   ASSERT (process != NULL);
+
+  lock_acquire (&process->lock);
+
+  printf ("Process MMAPs (name=%s, pid=%d, len=%lu): ", process->name, process->pid, list_size(&process->file_mmaps));
+
+  for (struct list_elem *e = list_begin (&process->file_mmaps); e != list_end (&process->file_mmaps); e = list_next (e)) {
+    struct mmap_node* mmap = list_entry (e, struct mmap_node, elem);
+    printf ("\n  (mapid=%d, num_vms=%lu) :: ", mmap->mapid, list_size(&mmap->vm_nodes));
+
+    for (struct list_elem *vm_e = list_begin (&mmap->vm_nodes); vm_e != list_end (&mmap->vm_nodes); vm_e = list_next (vm_e)) {
+      struct vm_node* vm = list_entry (vm_e, struct vm_node, mmap_list_elem);
+      print_vm_node(vm);
+      printf (" | ");
+    } 
+
+  }
+
+  printf ("\n---\n");
+
+  lock_release (&process->lock);
 }

@@ -193,6 +193,7 @@ page_fault(struct intr_frame *f)
   if (is_user_thread && is_user_vaddr(fault_addr))
   {
     if (not_present) {
+      
       if (activate_stack_frame(fault_addr)) {
         return;
       }
