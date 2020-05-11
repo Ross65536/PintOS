@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #include "filesys/off_t.h"
+#include "devices/block.h"
 
 // should not be set directly, must be though of as private fields
 struct file_page_node {
@@ -11,12 +12,14 @@ struct file_page_node {
   off_t offset;
   size_t num_zero_padding;
   struct file * file;
+  block_sector_t inumber;
 };
 
-static inline struct file_page_node create_finder(const char* file_path, off_t offeset) {
+static inline struct file_page_node create_finder(block_sector_t inumber, off_t offeset, size_t num_zeroes) {
   struct file_page_node ret = {
-      .file_path = file_path,
-      .offset = offeset
+      .inumber = inumber,
+      .offset = offeset,
+      .num_zero_padding = num_zeroes
   };
 
   return ret;

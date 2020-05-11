@@ -8,7 +8,7 @@
 #include "threads/vaddr.h"
 #include "strings_pool.h"
 #include "frame_table.h"
-
+#include "filesys/inode.h"
 
 
 struct file_page_node* create_file_page_node(struct file * opened_file, const char* file_path, off_t offset, size_t num_zero_padding) {
@@ -16,6 +16,8 @@ struct file_page_node* create_file_page_node(struct file * opened_file, const ch
 
   const bool holding = lock_acquire_if_not_held(&filesys_monitor);
   struct file * file = file_reopen(opened_file);
+  struct inode *inode = file_get_inode (file);
+  const block_sector_t inumber = inode_get_inumber(inode);
   lock_release_if_not_held (&filesys_monitor, holding);
 
   if (file == NULL) {
@@ -32,6 +34,7 @@ struct file_page_node* create_file_page_node(struct file * opened_file, const ch
   node->file_path = copy;
   node->offset = offset;
   node->num_zero_padding = num_zero_padding;
+  node->inumber = inumber;
 
   return node;
 }
@@ -47,11 +50,11 @@ void destroy_file_page_node(struct file_page_node* node) {
 }
 
 unsigned int hash_file_page_node (struct file_page_node* node) {
-  return hash_string(node->file_path) ^ hash_int(node->offset) ^ hash_int(node->num_zero_padding);
+  return hash_int(node->inumber) ^ hash_int(node->offset) ^ hash_int(node->num_zero_padding);
 }
 
 int file_page_node_cmp (struct file_page_node* node_l, struct file_page_node* node_r) {
-  const int path_cmp = strcmp (node_l->file_path, node_r->file_path);
+  const int path_cmp = ((int) node_l->inumber) - ((int) node_r->inumber);
   if (path_cmp != 0) {
     return path_cmp;
   }

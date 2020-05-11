@@ -20,6 +20,7 @@
 #include "process_impl.h"
 #include "vm/strings_pool.h"
 #include "userprog/vm.h"
+#include "filesys/inode.h"
 
 struct lock filesys_monitor;
 
@@ -758,13 +759,18 @@ int add_file_mapping(struct process_node* process, int fd, void* addr) {
   process->mapid_counter++;
   list_init(&map_node->vm_nodes);
 
+  const bool holding = lock_acquire_if_not_held(&filesys_monitor);
+  struct inode *inode = file_get_inode (file_node->file);
+  const block_sector_t inumber = inode_get_inumber(inode);
+  lock_release_if_not_held (&filesys_monitor, holding);
+
   for (off_t i = 0; i < file_size; i += PGSIZE) {
 
     void* page_addr = increment_ptr(addr, i);
-    struct file_page_node file_page_finder = create_finder (file_node->file_path, i);
 
     const bool is_last = i + PGSIZE >= file_size;
     size_t num_zeroes = is_last ? PGSIZE - (file_size % PGSIZE) : 0;
+    struct file_page_node file_page_finder = create_finder (inumber, i, num_zeroes);
     const bool readonly = active_file_exists(&readonly_files, &file_page_finder);
     struct vm_node* vm_node = add_file_backed_vm_internal(process, page_addr, file_node->file, file_node->file_path, i, num_zeroes, readonly, readonly);
     ASSERT (vm_node != NULL); // TODO add destruction
