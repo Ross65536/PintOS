@@ -15,12 +15,21 @@
 struct file_page_node* create_file_page_node(const char* file_path, off_t offset, size_t num_zero_padding) {
   ASSERT (num_zero_padding <= PGSIZE);
 
+  const bool holding = lock_acquire_if_not_held(&filesys_monitor);
+  struct file * file = filesys_open(file_path);
+  lock_release_if_not_held (&filesys_monitor, holding);
+
+  if (file == NULL) {
+    return NULL;
+  }
+
   struct file_page_node* node = malloc (sizeof (struct file_page_node));
   if (node == NULL) {
     return NULL;
   }
 
   const char* copy = add_string_pool (file_path);
+  node->file = file;
   node->file_path = copy;
   node->offset = offset;
   node->num_zero_padding = num_zero_padding;
@@ -30,6 +39,11 @@ struct file_page_node* create_file_page_node(const char* file_path, off_t offset
 
 void destroy_file_page_node(struct file_page_node* node) {
   remove_string_pool(node->file_path);
+
+  const bool holding = lock_acquire_if_not_held (&filesys_monitor);
+  file_close(node->file);
+  lock_release_if_not_held (&filesys_monitor, holding);
+
   free (node);
 }
 
@@ -52,47 +66,31 @@ int file_page_node_cmp (struct file_page_node* node_l, struct file_page_node* no
 }
 
 struct frame_node* load_file_page_frame(struct file_page_node* node) {
-  lock_acquire (&filesys_monitor);
-  struct file *file = filesys_open (node->file_path);
-  lock_release (&filesys_monitor);
-  if (file == NULL) {
-    return NULL;
-  }
 
-  lock_acquire (&filesys_monitor);
-  file_seek(file, node->offset);
-  lock_release (&filesys_monitor);
 
   struct frame_node* frame = allocate_user_page();
   void* addr = get_frame_phys_addr(frame);
   const off_t num_read = PGSIZE - node->num_zero_padding;
 
   lock_acquire (&filesys_monitor);
-  if (file_read (file, addr, num_read) != num_read) {
+  file_seek(node->file, node->offset);
+  if (file_read (node->file, addr, num_read) != num_read) {
     destroy_frame(frame);
     frame = NULL;
   }
  
-  file_close(file);
   lock_release (&filesys_monitor);
 
   return frame;
 }
 
 bool writeback_file_page_frame(struct file_page_node* node, void* page_addr) {
-  lock_acquire (&filesys_monitor);
-  struct file *file = filesys_open (node->file_path);
-  lock_release (&filesys_monitor);
-
-  if (file == NULL) {
-    return false;
-  }
 
   const off_t num_write = PGSIZE - node->num_zero_padding;
   lock_acquire (&filesys_monitor);
-  const bool ok = file_write (file, page_addr, num_write) == num_write;
+  file_seek(node->file, node->offset);
+  const bool ok = file_write (node->file, page_addr, num_write) == num_write;
   ASSERT (ok);
-  file_close(file);
   lock_release (&filesys_monitor);
 
   return ok;

@@ -471,7 +471,6 @@ static struct file *load(struct start_process_arg *start_process_arg, void (**ei
         uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
         uint32_t page_offset = phdr.p_vaddr & PGMASK;
         uint32_t read_bytes, zero_bytes;
-        // printf("phdr.p_offset=%d phdr.p_vaddr=%x phdr.p_filesz=%d\n", phdr.p_offset, phdr.p_vaddr, phdr.p_filesz);
         if (phdr.p_filesz > 0)
         {
           /* Normal segment.

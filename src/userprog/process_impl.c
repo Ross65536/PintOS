@@ -416,14 +416,12 @@ static struct vm_node* add_file_backed_vm_internal(struct process_node* process,
 
   struct vm_node* node = create_vm_node(vaddr, process);
   if (node == NULL) {
-    lock_release (&process->lock);
     return NULL;
   }
 
   struct file_page_node* file_page = create_file_page_node(file_path, offset, num_zero_padding);
   if (file_page == NULL) {
     free (node);
-    lock_release (&process->lock);
     return NULL;
   }
 
@@ -437,7 +435,6 @@ static struct vm_node* add_file_backed_vm_internal(struct process_node* process,
     if (shared_executable == NULL) {
       free (node);
       destroy_file_page_node(file_page);
-      lock_release (&process->lock);
       return NULL;
     }
     node->page_common = shared_readonly_file ? 

@@ -40,6 +40,21 @@ void lock_release (struct lock *);
 void lock_release_with_locking (struct lock *lock, bool donate);
 bool lock_held_by_current_thread (const struct lock *);
 
+static inline bool lock_acquire_if_not_held(struct lock * lock) {
+  const bool is_held = lock_held_by_current_thread(lock);
+  if (!is_held) {
+    lock_acquire (lock);
+  }
+
+  return is_held;
+}
+
+static inline void lock_release_if_not_held(struct lock * lock, bool is_held) {
+  if (!is_held) {
+    lock_release (lock);
+  }
+}
+
 /* Condition variable. */
 struct condition 
   {

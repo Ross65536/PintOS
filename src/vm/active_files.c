@@ -19,6 +19,7 @@ struct file_offset_mapping {
   struct file_page_node* file_page;
   struct frame_node* frame;
   struct lock lock;
+  struct file* file;
   unsigned int process_ref_count;
 };
 

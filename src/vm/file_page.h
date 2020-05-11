@@ -9,6 +9,7 @@ struct file_page_node {
   const char* file_path;
   off_t offset;
   size_t num_zero_padding;
+  struct file * file;
 };
 
 struct file_page_node* create_file_page_node(const char* file_path, off_t offset, size_t num_zero_padding);
