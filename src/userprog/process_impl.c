@@ -489,11 +489,11 @@ static void destroy_vm_page_node (struct vm_node *node) {
 
   if (is_mapped (node)) {
     struct frame_node* frame = node->frame; 
-    if (! is_page_common_shared_file(&node->page_common)) {
-      destroy_frame(frame);
-    } else {
-      unmap_vm_node(node);
+    if (is_page_common_shared_file(&node->page_common)) {
       remove_frame_vm_node(frame, &node->frame_list_elem);
+      unmap_vm_node(node);
+    } else {
+      destroy_frame(frame);
     }
   } else {
     if (type == FILE_BACKED_EXECUTABLE_STATIC && node->page_common.body.file_backed_executable_static.swap.is_swapped) { // in swap
@@ -638,19 +638,27 @@ static void destroy_vm_page_table(struct process_node* process) {
   hash_destroy (&process->vm_table, destroy_vm_page);
 }
 
+bool is_vm_node_dirty(struct vm_node* node) {
+  ASSERT (node != NULL);
+  ASSERT (is_mapped (node));
+
+  const bool held = lock_acquire_if_not_held (&node->process->lock);
+  if (!is_mapped(node)) {
+    lock_release_if_not_held (&node->process->lock, held);
+    return false;
+  }
+  
+  const bool dirty = pagedir_is_dirty(node->process->pagedir, (void*) node->page_vaddr);
+  lock_release_if_not_held (&node->process->lock, held);
+
+  return dirty;
+}
+
 void unmap_vm_node_frame(struct vm_node* node) {
   const bool held = lock_acquire_if_not_held (&node->process->lock);
   if (is_mapped(node))
     unmap_vm_node(node);
   lock_release_if_not_held (&node->process->lock, held);
-}
-
-bool is_vm_node_dirty(struct vm_node* node) {
-  const bool held = lock_acquire_if_not_held (&node->process->lock);
-
-  lock_release_if_not_held (&node->process->lock, held);
-
-  return true;
 }
 
 static struct vm_node* find_vm_node_internal(struct process_node* process, void* address) {

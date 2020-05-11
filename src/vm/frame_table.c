@@ -19,6 +19,7 @@ struct frame_node {
   struct lock lock;
   struct page_common page_common;
   void* phys_addr;
+  bool dirty_acum;
 };
 
 static struct frame_table {
@@ -41,6 +42,7 @@ static struct frame_node* create_frame_node(void) {
   node->phys_addr = NULL;
   lock_init(&node->lock);
   node->page_common.type = -1;
+  node->dirty_acum = false;
 
   return node;
 }
@@ -86,20 +88,20 @@ void add_frame_vm_page(struct frame_node* node, struct vm_node* page, struct pag
   lock_release(&node->lock); 
 }
 
-static bool collect_dirty_bits(struct frame_node* node) {
+static void collect_dirty_bits(struct frame_node* node) {
   ASSERT (node != NULL);
   ASSERT (lock_held_by_current_thread (&node->lock));
 
   for (struct list_elem *e = list_begin (&node->vm_nodes); e != list_end (&node->vm_nodes); e = list_next (e)) {
-    struct vm_node* node = list_entry(e, struct vm_node, frame_list_elem);
-    
+    struct vm_node* vm_node = list_entry(e, struct vm_node, frame_list_elem);
+    if (is_vm_node_dirty (vm_node))
+      node->dirty_acum = true;
   }
-
-  return true;
 }
 
 void remove_frame_vm_node(struct frame_node* node, struct list_elem* page) {
   lock_acquire(&node->lock);
+  collect_dirty_bits(node);
   list_remove(page);
   lock_release(&node->lock);
 }
@@ -114,7 +116,7 @@ void destroy_frame(struct frame_node* node) {
   list_remove (&node->list_elem);
   lock_release (&frame_table.monitor);
 
-  const bool is_dirty = collect_dirty_bits(node);
+  collect_dirty_bits(node);
 
   for (struct list_elem *e = list_begin (&node->vm_nodes); e != list_end (&node->vm_nodes); e = list_remove (e)) {
     struct vm_node* node = list_entry(e, struct vm_node, frame_list_elem);
@@ -125,7 +127,7 @@ void destroy_frame(struct frame_node* node) {
     unload_file_offset_mapping_frame(get_page_common_shared_active_file(&node->page_common));
   }
 
-  if (node->page_common.type == SHARED_WRITABLE_FILE && is_dirty) {
+  if (node->page_common.type == SHARED_WRITABLE_FILE && node->dirty_acum) {
     writeback_file_page_frame(get_file_offset_mapping_file_page(node->page_common.body.shared_writable_file), node->phys_addr);
   }
 
