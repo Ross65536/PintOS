@@ -390,20 +390,21 @@ static struct vm_node* create_vm_node(void * vaddr, struct process_node* process
   return node;
 }
 
-static struct vm_node* add_file_backed_vm_internal(struct process_node* process, uint8_t* vaddr, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source) {
+static struct vm_node* add_file_backed_vm_internal(struct process_node* process, uint8_t* vaddr, struct file* file, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source) {
   ASSERT (process != NULL);
   ASSERT (! process->exited);
   ASSERT (is_user_vaddr (vaddr));
   ASSERT (is_page_aligned (vaddr))
   ASSERT (num_zero_padding <= PGSIZE);
   ASSERT (lock_held_by_current_thread(&process->lock));
+  ASSERT (file != NULL);
 
   struct vm_node* node = create_vm_node(vaddr, process);
   if (node == NULL) {
     return NULL;
   }
 
-  struct file_page_node* file_page = create_file_page_node(file_path, offset, num_zero_padding);
+  struct file_page_node* file_page = create_file_page_node(file, file_path, offset, num_zero_padding);
   if (file_page == NULL) {
     free (node);
     return NULL;
@@ -435,14 +436,14 @@ static struct vm_node* add_file_backed_vm_internal(struct process_node* process,
   return node;
 }
 
-struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source) {
+struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr, struct file* file, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source) {
   ASSERT (process != NULL);
   ASSERT (! process->exited);
   ASSERT (! (!readonly && !exec_file_source));
 
   lock_acquire (&process->lock);
 
-  struct vm_node* node = add_file_backed_vm_internal(process, vaddr, file_path, offset, num_zero_padding, readonly, exec_file_source);
+  struct vm_node* node = add_file_backed_vm_internal(process, vaddr, file, file_path, offset, num_zero_padding, readonly, exec_file_source);
 
   lock_release (&process->lock);
 
@@ -765,7 +766,7 @@ int add_file_mapping(struct process_node* process, int fd, void* addr) {
     const bool is_last = i + PGSIZE >= file_size;
     size_t num_zeroes = is_last ? PGSIZE - (file_size % PGSIZE) : 0;
     const bool readonly = active_file_exists(&readonly_files, &file_page_finder);
-    struct vm_node* vm_node = add_file_backed_vm_internal(process, page_addr, file_node->file_path, i, num_zeroes, readonly, readonly);
+    struct vm_node* vm_node = add_file_backed_vm_internal(process, page_addr, file_node->file, file_node->file_path, i, num_zeroes, readonly, readonly);
     ASSERT (vm_node != NULL); // TODO add destruction
 
     list_push_back(&map_node->vm_nodes, &vm_node->mmap_list_elem);

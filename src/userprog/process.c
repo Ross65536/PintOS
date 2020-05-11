@@ -287,7 +287,7 @@ static bool validate_segment(const struct Elf32_Phdr *, struct file *);
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
 static bool
-load_segment(struct file *file UNUSED, off_t ofs, uint8_t *upage,
+load_segment(struct file *file, off_t ofs, uint8_t *upage,
              uint32_t read_bytes, uint32_t zero_bytes, bool writable, const char *file_name, struct process_node *process_node)
 {
   ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
@@ -302,7 +302,7 @@ load_segment(struct file *file UNUSED, off_t ofs, uint8_t *upage,
     size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
     size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-    struct vm_node *node = add_file_backed_vm(process_node, upage, file_name, ofs, page_zero_bytes, !writable, true);
+    struct vm_node *node = add_file_backed_vm(process_node, upage, file, file_name, ofs, page_zero_bytes, !writable, true);
     if (node == NULL)
     {
       return false;

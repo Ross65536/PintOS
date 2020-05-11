@@ -21,7 +21,7 @@ struct vm_node {
 };
 
 bool is_vm_node_dirty(struct vm_node* node);
-struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source);
+struct vm_node* add_file_backed_vm(struct process_node* process, uint8_t* vaddr, struct file* file, const char* file_path, off_t offset, size_t num_zero_padding, bool readonly, bool exec_file_source);
 void print_process_vm(struct process_node* process);
 void* activate_vm_page(struct vm_node* node);
 void unmap_vm_node_frame(struct vm_node* node);

@@ -22,7 +22,7 @@ static inline struct file_page_node create_finder(const char* file_path, off_t o
   return ret;
 }
 
-struct file_page_node* create_file_page_node(const char* file_path, off_t offset, size_t num_zero_padding);
+struct file_page_node* create_file_page_node(struct file * opened_file, const char* file_path, off_t offset, size_t num_zero_padding);
 void destroy_file_page_node(struct file_page_node* node);
 void print_file_page_node(struct file_page_node* node);
 struct frame_node* load_file_page_frame(struct file_page_node* node);

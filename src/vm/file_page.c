@@ -2,7 +2,6 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "filesys/filesys.h"
 #include "filesys/off_t.h"
 #include "file_page.h"
 #include "threads/malloc.h"
@@ -12,11 +11,11 @@
 
 
 
-struct file_page_node* create_file_page_node(const char* file_path, off_t offset, size_t num_zero_padding) {
+struct file_page_node* create_file_page_node(struct file * opened_file, const char* file_path, off_t offset, size_t num_zero_padding) {
   ASSERT (num_zero_padding <= PGSIZE);
 
   const bool holding = lock_acquire_if_not_held(&filesys_monitor);
-  struct file * file = filesys_open(file_path);
+  struct file * file = file_reopen(opened_file);
   lock_release_if_not_held (&filesys_monitor, holding);
 
   if (file == NULL) {
