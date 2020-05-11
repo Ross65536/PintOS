@@ -766,10 +766,7 @@ int add_file_mapping(struct process_node* process, int fd, void* addr) {
   for (off_t i = 0; i < file_size; i += PGSIZE) {
 
     void* page_addr = increment_ptr(addr, i);
-    struct file_page_node file_page_finder = {
-      .file_path = file_node->file_path,
-      .offset = i
-    };
+    struct file_page_node file_page_finder = create_finder (file_node->file_path, i);
 
     const bool is_last = i + PGSIZE >= file_size;
     size_t num_zeroes = is_last ? PGSIZE - (file_size % PGSIZE) : 0;

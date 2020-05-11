@@ -5,12 +5,22 @@
 
 #include "filesys/off_t.h"
 
+// should not be set directly, must be though of as private fields
 struct file_page_node {
   const char* file_path;
   off_t offset;
   size_t num_zero_padding;
   struct file * file;
 };
+
+static inline struct file_page_node create_finder(const char* file_path, off_t offeset) {
+  struct file_page_node ret = {
+      .file_path = file_path,
+      .offset = offeset
+  };
+
+  return ret;
+}
 
 struct file_page_node* create_file_page_node(const char* file_path, off_t offset, size_t num_zero_padding);
 void destroy_file_page_node(struct file_page_node* node);
