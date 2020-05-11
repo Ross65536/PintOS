@@ -163,7 +163,7 @@ struct open_file_node {
   const char* file_path;
 };
 
-static void print_open_file_node(struct open_file_node* file) {
+inline static void print_open_file_node(struct open_file_node* file) {
   printf("(fd=%d, path=%s", file->fd, file->file_path);
 }
 
@@ -363,17 +363,6 @@ void exit_curr_process(int exit_code, bool should_print_exit_code) {
 ////     VM    /////
 ////////////////////
 
-struct vm_node {
-  struct process_node* process; // parent process's lock
-  struct hash_elem hash_elem; // for process vm table
-  struct list_elem list_elem; // for frame_table
-  struct list_elem mmap_list_elem; // for file mmaps
-
-  struct frame_node* frame;
-  uintptr_t page_vaddr;
-  struct page_common page_common;
-};
-
 static inline bool is_mapped(struct vm_node* node) {
   return node->frame != NULL;
 }
@@ -388,11 +377,6 @@ static bool vm_table_less (const struct hash_elem *l, const struct hash_elem *r,
   struct vm_node *node_r = hash_entry (r, struct vm_node, hash_elem);
 
   return node_l->page_vaddr < node_r->page_vaddr;
-}
-
-struct list_elem* get_vm_node_list_elem(struct vm_node* node) {
-  ASSERT (node != NULL);
-  return &node->list_elem;
 }
 
 static struct vm_node* create_vm_node(void * vaddr, struct process_node* process) {
@@ -492,7 +476,6 @@ struct vm_node* add_stack_freestanding_vm(struct process_node* process, uint8_t*
 
 static void unmap_vm_node(struct vm_node* node) {
   ASSERT (lock_held_by_current_thread(&node->process->lock));
-
   pagedir_clear_page (node->process->pagedir, (void*) node->page_vaddr); // unmap from pagedir
   node->frame = NULL;
 }
@@ -506,10 +489,11 @@ static void destroy_vm_page_node (struct vm_node *node) {
 
   if (is_mapped (node)) {
     struct frame_node* frame = node->frame; 
-    unmap_vm_node(node);
-    remove_frame_vm_node(frame, &node->list_elem);
     if (! is_page_common_shared_file(&node->page_common)) {
       destroy_frame(frame);
+    } else {
+      unmap_vm_node(node);
+      remove_frame_vm_node(frame, &node->frame_list_elem);
     }
   } else {
     if (type == FILE_BACKED_EXECUTABLE_STATIC && node->page_common.body.file_backed_executable_static.swap.is_swapped) { // in swap
@@ -601,7 +585,6 @@ void* activate_vm_page(struct vm_node* node) {
   const bool writable = ! is_page_common_readonly(&node->page_common);
   if (! install_page(node->process->pagedir, vaddr, paddr, writable)) {
     struct lock* lock = &node->process->lock;
-    remove_frame_vm_node(node->frame, &node->list_elem);
     destroy_frame(node->frame);
     lock_release (lock);
     return NULL;
@@ -655,16 +638,19 @@ static void destroy_vm_page_table(struct process_node* process) {
   hash_destroy (&process->vm_table, destroy_vm_page);
 }
 
-void deactivate_vm_node_list(struct list* list) {
-  for (struct list_elem *e = list_begin (list); e != list_end (list); e = list_next (e)) {
-    struct vm_node* node = list_entry(e, struct vm_node, list_elem);
-
-    lock_acquire (&node->process->lock);
-
+void unmap_vm_node_frame(struct vm_node* node) {
+  const bool held = lock_acquire_if_not_held (&node->process->lock);
+  if (is_mapped(node))
     unmap_vm_node(node);
+  lock_release_if_not_held (&node->process->lock, held);
+}
 
-    lock_release (&node->process->lock);
-  }
+bool is_vm_node_dirty(struct vm_node* node) {
+  const bool held = lock_acquire_if_not_held (&node->process->lock);
+
+  lock_release_if_not_held (&node->process->lock, held);
+
+  return true;
 }
 
 static struct vm_node* find_vm_node_internal(struct process_node* process, void* address) {

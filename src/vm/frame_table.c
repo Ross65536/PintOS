@@ -19,7 +19,6 @@ struct frame_node {
   struct lock lock;
   struct page_common page_common;
   void* phys_addr;
-
 };
 
 static struct frame_table {
@@ -82,16 +81,29 @@ void add_frame_vm_page(struct frame_node* node, struct vm_node* page, struct pag
     }
   }
 
-  list_push_back(&node->vm_nodes, get_vm_node_list_elem(page));
+  list_push_back(&node->vm_nodes, &page->frame_list_elem);
+
+  lock_release(&node->lock); 
+}
+
+static bool collect_dirty_bits(struct frame_node* node) {
+  ASSERT (node != NULL);
+
+  lock_acquire(&node->lock);
+
+  for (struct list_elem *e = list_begin (&node->vm_nodes); e != list_end (&node->vm_nodes); e = list_next (e)) {
+    struct vm_node* node = list_entry(e, struct vm_node, frame_list_elem);
+    
+  }
+
 
   lock_release(&node->lock);
+
 }
 
 void remove_frame_vm_node(struct frame_node* node, struct list_elem* page) {
   lock_acquire(&node->lock);
-
   list_remove(page);
-
   lock_release(&node->lock);
 }
 
@@ -103,9 +115,13 @@ void destroy_frame(struct frame_node* node) {
 
   lock_acquire (&frame_table.monitor);
   list_remove (&node->list_elem);
-  lock_release (&frame_table.monitor);
 
-  deactivate_vm_node_list(&node->vm_nodes);
+  for (struct list_elem *e = list_begin (&node->vm_nodes); e != list_end (&node->vm_nodes); e = list_remove (e)) {
+    struct vm_node* node = list_entry(e, struct vm_node, frame_list_elem);
+    unmap_vm_node_frame(node);
+  }
+
+  lock_release (&frame_table.monitor);
 
   if (is_page_common_shared_file(&node->page_common)) {
     unload_file_offset_mapping_frame(get_page_common_shared_active_file(&node->page_common));
@@ -117,8 +133,6 @@ void destroy_frame(struct frame_node* node) {
   }
 
   // TODO implement swapping
-
-  list_clear(&node->vm_nodes);
 
   palloc_free_page(node->phys_addr);
   lock_release(&node->lock);
@@ -148,10 +162,5 @@ void print_frame_table(void) {
 
 void* get_frame_phys_addr(struct frame_node* node) {
   ASSERT (node != NULL);
-
-  // lock_acquire(&node->lock);
   return node->phys_addr;
-  // lock_release(&node->lock);
-
-  // return addr;
 }
