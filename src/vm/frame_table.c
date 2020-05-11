@@ -88,17 +88,14 @@ void add_frame_vm_page(struct frame_node* node, struct vm_node* page, struct pag
 
 static bool collect_dirty_bits(struct frame_node* node) {
   ASSERT (node != NULL);
-
-  lock_acquire(&node->lock);
+  ASSERT (lock_held_by_current_thread (&node->lock));
 
   for (struct list_elem *e = list_begin (&node->vm_nodes); e != list_end (&node->vm_nodes); e = list_next (e)) {
     struct vm_node* node = list_entry(e, struct vm_node, frame_list_elem);
     
   }
 
-
-  lock_release(&node->lock);
-
+  return true;
 }
 
 void remove_frame_vm_node(struct frame_node* node, struct list_elem* page) {
@@ -115,21 +112,21 @@ void destroy_frame(struct frame_node* node) {
 
   lock_acquire (&frame_table.monitor);
   list_remove (&node->list_elem);
+  lock_release (&frame_table.monitor);
+
+  const bool is_dirty = collect_dirty_bits(node);
 
   for (struct list_elem *e = list_begin (&node->vm_nodes); e != list_end (&node->vm_nodes); e = list_remove (e)) {
     struct vm_node* node = list_entry(e, struct vm_node, frame_list_elem);
     unmap_vm_node_frame(node);
   }
 
-  lock_release (&frame_table.monitor);
-
   if (is_page_common_shared_file(&node->page_common)) {
     unload_file_offset_mapping_frame(get_page_common_shared_active_file(&node->page_common));
   }
 
-  if (node->page_common.type == SHARED_WRITABLE_FILE) {
+  if (node->page_common.type == SHARED_WRITABLE_FILE && is_dirty) {
     writeback_file_page_frame(get_file_offset_mapping_file_page(node->page_common.body.shared_writable_file), node->phys_addr);
-    // check for dirty flags
   }
 
   // TODO implement swapping
